@@ -21,8 +21,8 @@
 const { useState, useEffect, useMemo } = React;
 
 // ---------- Supabase ----------
-const SUPABASE_URL = "DEIN-PROJEKT.supabase.co"; // TODO: aus Supabase-Dashboard → Project Settings → API eintragen (mit https://)
-const SUPABASE_ANON_KEY = "DEIN-ANON-KEY"; // TODO: aus Supabase-Dashboard → Project Settings → API eintragen
+const SUPABASE_URL = "https://gmhhadgakqlohcbjbdhi.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_9aaWLSI1aH40TuRD5aH2xQ_uMVt5cL-";
 const SUPABASE_CONFIGURED = SUPABASE_URL.startsWith("https://") && !SUPABASE_ANON_KEY.startsWith("DEIN-");
 const sb = SUPABASE_CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
