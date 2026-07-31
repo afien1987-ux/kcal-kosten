@@ -385,6 +385,7 @@ function ZutatenTab({ zutaten, onAdd, onDelete }) {
               inputMode="decimal"
               required
               min="0.01"
+              step="any"
               value={form.kcal100}
               onChange={(e) => setForm({ ...form, kcal100: e.target.value })}
               className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
@@ -396,6 +397,7 @@ function ZutatenTab({ zutaten, onAdd, onDelete }) {
               inputMode="decimal"
               required
               min="0.01"
+              step="any"
               value={form.einkaufsmenge}
               onChange={(e) => setForm({ ...form, einkaufsmenge: e.target.value })}
               className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
@@ -546,6 +548,7 @@ function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
               type="number"
               inputMode="decimal"
               min="0.01"
+              step="any"
               value={pickMenge}
               onChange={(e) => setPickMenge(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLine(); } }}
