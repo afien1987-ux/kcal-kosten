@@ -53,6 +53,30 @@ wenn der Google-Provider in Supabase eingerichtet ist:
 5. Supabase Dashboard → **Authentication → Providers → Google** → aktivieren,
    Client-ID + Secret einfügen → Speichern.
 
+## 1b. Eigenen E-Mail-Versand einrichten (wichtig für echten Betrieb)
+Ohne diesen Schritt nutzt Supabase seinen eingebauten Test-Mailer mit einem
+sehr niedrigen Limit (nur wenige E-Mails pro Stunde) – das reicht nicht für
+echte Registrierungen und führt schnell zu "email rate limit exceeded".
+
+Variante ohne eigene Domain: Gmail als SMTP-Server.
+
+1. Auf dem Gmail-Konto, das als Absender dienen soll: 2-Faktor-Authentifizierung
+   aktivieren (falls noch nicht aktiv) unter
+   [myaccount.google.com/security](https://myaccount.google.com/security).
+2. Dort ein **App-Passwort** erzeugen: [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
+   → App "Mail", Gerät z. B. "Supabase kclal" → Generieren → das 16-stellige
+   Passwort kopieren (nicht das normale Gmail-Passwort).
+3. Supabase Dashboard → **Authentication → Emails → SMTP Settings** (oder
+   Authentication → Settings, Abschnitt "SMTP Settings") → **Enable Custom SMTP**:
+   - Sender email: die Gmail-Adresse
+   - Sender name: z. B. `Kalorien & Kosten`
+   - Host: `smtp.gmail.com`
+   - Port: `465`
+   - Username: die volle Gmail-Adresse
+   - Password: das App-Passwort aus Schritt 2
+4. Speichern. Danach hat der Versand Gmails reguläres Limit (500 E-Mails/Tag)
+   statt Supabase's Test-Limit – für eine private App mehr als genug.
+
 ## 2. Repo auf GitHub anlegen
 1. Neues Repo erstellen, z. B. `kalorien-kosten-tracker`.
 2. Diese Dateien/Ordner hochladen (flach, ohne `.git`):
