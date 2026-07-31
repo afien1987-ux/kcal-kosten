@@ -96,6 +96,28 @@ async function fileToBase64(file) {
   });
 }
 
+// Fotos direkt von der Handykamera können als HEIC statt JPEG vorliegen (von Claude nicht
+// unterstützt) und mehrere MB groß sein (langsamer Upload auf Mobilfunk). Deshalb vor dem
+// Versand immer über ein Canvas neu als JPEG kodieren und auf eine sinnvolle Größe verkleinern —
+// für Text-/Barcode-Erkennung reicht das, spart Zeit und KI-Kosten.
+async function fileToJpegBase64(file, maxDim = 1600, quality = 0.85) {
+  const bitmap = await createImageBitmap(file);
+  let { width, height } = bitmap;
+  if (width > maxDim || height > maxDim) {
+    const scale = maxDim / Math.max(width, height);
+    width = Math.round(width * scale);
+    height = Math.round(height * scale);
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  canvas.getContext("2d").drawImage(bitmap, 0, 0, width, height);
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Foto konnte nicht verarbeitet werden."))), "image/jpeg", quality);
+  });
+  return fileToBase64(blob);
+}
+
 function extractJson(text) {
   const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
   const start = cleaned.indexOf(cleaned.trim()[0] === "[" ? "[" : "{");
@@ -104,12 +126,23 @@ function extractJson(text) {
   return JSON.parse(slice);
 }
 
-async function callClaude({ system, messages, maxTokens = 1000 }) {
-  const res = await fetch("/api/claude", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ max_tokens: maxTokens, system, messages }),
-  });
+async function callClaude({ system, messages, maxTokens = 1000, timeoutMs = 25000 }) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch("/api/claude", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ max_tokens: maxTokens, system, messages }),
+      signal: controller.signal,
+    });
+  } catch (e) {
+    if (e.name === "AbortError") throw new Error("Zeitüberschreitung — die KI hat zu lange nicht geantwortet. Bitte erneut versuchen.");
+    throw new Error("Verbindung zur KI fehlgeschlagen. Internetverbindung prüfen und erneut versuchen.");
+  } finally {
+    clearTimeout(timer);
+  }
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Anfrage an die KI ist fehlgeschlagen.");
   const textBlock = data.content && data.content.find((b) => b.type === "text");
@@ -139,7 +172,7 @@ async function detectBarcodeNative(file) {
 }
 
 async function detectBarcodeViaClaude(file) {
-  const base64 = await fileToBase64(file);
+  const base64 = await fileToJpegBase64(file);
   const text = await callClaude({
     system:
       'Lies die Barcode-Nummer (EAN/UPC, meist 8 oder 13 Ziffern) unter dem Barcode auf diesem Produktfoto ab. Antworte ausschließlich mit reinem JSON, kein Markdown, keine Erklärung: {"barcode":"1234567890123"} oder {"barcode":null}, falls keine Nummer lesbar ist.',
@@ -147,7 +180,7 @@ async function detectBarcodeViaClaude(file) {
       {
         role: "user",
         content: [
-          { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } },
+          { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
           { type: "text", text: "Welche Barcode-Nummer steht auf diesem Foto?" },
         ],
       },
@@ -159,7 +192,18 @@ async function detectBarcodeViaClaude(file) {
 }
 
 async function lookupOpenFoodFacts(barcode) {
-  const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,nutriments`);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 15000);
+  let res;
+  try {
+    res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,nutriments`, {
+      signal: controller.signal,
+    });
+  } catch (e) {
+    throw new Error(e.name === "AbortError" ? "Zeitüberschreitung bei OpenFoodFacts. Bitte erneut versuchen." : "Verbindung zu OpenFoodFacts fehlgeschlagen.");
+  } finally {
+    clearTimeout(timer);
+  }
   const data = await res.json();
   if (data.status !== 1 || !data.product) return null;
   const kcal = data.product.nutriments && data.product.nutriments["energy-kcal_100g"];
@@ -462,7 +506,7 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
         setBarcodeError("Name übernommen, aber keine kcal-Angabe bei OpenFoodFacts gefunden — bitte manuell ergänzen.");
       }
     } catch (err) {
-      setBarcodeError(err.message || "Barcode konnte nicht ausgewertet werden.");
+      setBarcodeError((err && err.message) || "Barcode konnte nicht ausgewertet werden.");
     } finally {
       setBarcodeBusy(false);
     }
@@ -476,7 +520,7 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
     setScanResults(null);
     setScanBusy(true);
     try {
-      const base64 = await fileToBase64(file);
+      const base64 = await fileToJpegBase64(file, 2000);
       const namenListe = zutaten.map((z) => z.name);
       const text = await callClaude({
         system:
@@ -487,7 +531,7 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
           {
             role: "user",
             content: [
-              { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } },
+              { type: "image", source: { type: "base64", media_type: "image/jpeg", data: base64 } },
               { type: "text", text: "Welche Artikel mit Preisen stehen auf diesem Kassenzettel?" },
             ],
           },
@@ -507,7 +551,7 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
         );
       }
     } catch (err) {
-      setScanError(err.message || "Kassenzettel konnte nicht ausgewertet werden.");
+      setScanError((err && err.message) || "Kassenzettel konnte nicht ausgewertet werden.");
     } finally {
       setScanBusy(false);
     }
