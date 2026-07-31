@@ -67,6 +67,8 @@ const UserIcon = (p) => <Icon {...p}><circle cx="12" cy="8" r="4"/><path d="M4 2
 const ChevronRightIcon = (p) => <Icon {...p}><path d="m9 18 6-6-6-6"/></Icon>;
 const AlertTriangleIcon = (p) => <Icon {...p}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></Icon>;
 const ExternalLinkIcon = (p) => <Icon {...p}><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></Icon>;
+const CameraIcon = (p) => <Icon {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.2"/></Icon>;
+const LoaderIcon = (p) => <Icon {...p} className={`animate-spin ${p.className || ""}`}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></Icon>;
 
 // Weitere Slots einfach ergänzen, z.B. "Zweites Frühstück", "Nachmittag" — keine DB-Änderung nötig.
 const MAHLZEIT_KATEGORIEN = ["Frühstück", "Mittagessen", "Abendessen", "Snack"];
@@ -82,6 +84,43 @@ const startOfTodayISO = () => {
   d.setHours(0, 0, 0, 0);
   return d.toISOString();
 };
+
+// ---------- Kassenzettel-Scan ----------
+async function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result.split(",")[1]);
+    r.onerror = () => reject(new Error("Foto konnte nicht gelesen werden."));
+    r.readAsDataURL(file);
+  });
+}
+
+function extractJson(text) {
+  const cleaned = text.replace(/```json/gi, "").replace(/```/g, "").trim();
+  const start = cleaned.indexOf(cleaned.trim()[0] === "[" ? "[" : "{");
+  const end = Math.max(cleaned.lastIndexOf("}"), cleaned.lastIndexOf("]"));
+  const slice = start >= 0 && end >= 0 ? cleaned.slice(start, end + 1) : cleaned;
+  return JSON.parse(slice);
+}
+
+async function callClaude({ system, messages, maxTokens = 1000 }) {
+  const res = await fetch("/api/claude", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ max_tokens: maxTokens, system, messages }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || "Anfrage an die KI ist fehlgeschlagen.");
+  const textBlock = data.content && data.content.find((b) => b.type === "text");
+  if (!textBlock) throw new Error("Die KI hat keine Antwort geliefert.");
+  return textBlock.text;
+}
+
+function findZutatByName(name, zutaten) {
+  if (!name) return null;
+  const target = name.trim().toLowerCase();
+  return zutaten.find((z) => z.name.trim().toLowerCase() === target) || null;
+}
 
 // ---------- Kleine UI-Bausteine im Kassenbon-Stil ----------
 function Bon({ children, className = "" }) {
@@ -342,10 +381,73 @@ function AuthScreen() {
 }
 
 // ---------- Zutaten-Tab ----------
-function ZutatenTab({ zutaten, onAdd, onDelete }) {
+function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
   const [form, setForm] = useState({ name: "", kcal100: "", einkaufsmenge: "", einkaufspreis: "" });
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState("");
+  const [scanBusy, setScanBusy] = useState(false);
+  const [scanError, setScanError] = useState("");
+  const [scanResults, setScanResults] = useState(null);
+
+  const handleScan = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    setScanError("");
+    setScanResults(null);
+    setScanBusy(true);
+    try {
+      const base64 = await fileToBase64(file);
+      const namenListe = zutaten.map((z) => z.name);
+      const text = await callClaude({
+        system:
+          "Du liest deutsche Kassenzettel (Kassenbons) aus Fotos aus. Extrahiere jede Artikelposition mit Name und tatsächlich bezahltem Preis (Rabatte, sofern der Position direkt zuordenbar, bereits eingerechnet). Ordne jede Position außerdem, falls passend, einer der folgenden bereits vorhandenen Zutaten zu — auch bei Abkürzungen, Markennamen oder Mengenangaben auf dem Bon (z.B. \"HAFERFL. KOELLN 500G\" passt zu \"Haferflocken\"). Bestehende Zutaten: " +
+          JSON.stringify(namenListe) +
+          '. Antworte ausschließlich mit reinem JSON, kein Markdown, keine Erklärung außerhalb des JSON. Format: {"positionen":[{"artikel":"","preis":0.00,"zutat":null}]}. "zutat" ist entweder exakt einer der Namen aus der Liste oder null, wenn keiner passt. Ignoriere Pfand, Summen-/Gesamtzeilen und Werbetexte.',
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } },
+              { type: "text", text: "Welche Artikel mit Preisen stehen auf diesem Kassenzettel?" },
+            ],
+          },
+        ],
+        maxTokens: 1200,
+      });
+      const parsed = extractJson(text);
+      const positionen = Array.isArray(parsed.positionen) ? parsed.positionen : [];
+      if (positionen.length === 0) {
+        setScanError("Auf dem Foto konnten keine Artikel erkannt werden.");
+      } else {
+        setScanResults(
+          positionen.map((p, i) => {
+            const zutat = findZutatByName(p.zutat, zutaten);
+            return { id: i, artikel: p.artikel, preis: p.preis, zutat, checked: !!zutat };
+          })
+        );
+      }
+    } catch (err) {
+      setScanError(err.message || "Kassenzettel konnte nicht ausgewertet werden.");
+    } finally {
+      setScanBusy(false);
+    }
+  };
+
+  const toggleScanResult = (id) => {
+    setScanResults((rs) => rs.map((r) => (r.id === id ? { ...r, checked: !r.checked } : r)));
+  };
+
+  const applyScanResults = async () => {
+    const updates = scanResults.filter((r) => r.zutat && r.checked);
+    await Promise.all(updates.map((r) => onUpdatePreis(r.zutat.id, r.preis)));
+    setScanResults(null);
+  };
+
+  const quickAddFromScan = (r) => {
+    setForm({ name: r.artikel, kcal100: "", einkaufsmenge: "", einkaufspreis: String(r.preis) });
+    setScanResults((rs) => rs.filter((x) => x.id !== r.id));
+  };
 
   const add = async (e) => {
     e.preventDefault();
@@ -447,10 +549,70 @@ function ZutatenTab({ zutaten, onAdd, onDelete }) {
             <PlusIcon size={15} /> Zutat speichern
           </button>
         </form>
-        <p className="mt-2 text-[11px] text-[#79705A] flex items-center gap-1">
-          <ReceiptIcon size={12} /> Kassenzettel-Scan folgt als eigener Import-Weg (Prototyp: manuell).
+      </Bon>
+
+      <Bon className="p-4">
+        <SectionLabel>Kassenzettel scannen</SectionLabel>
+        <label className="w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] cursor-pointer focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[#2B2A28]">
+          {scanBusy ? <LoaderIcon size={15} /> : <CameraIcon size={15} />}
+          {scanBusy ? "Wird ausgewertet…" : "Kassenzettel fotografieren"}
+          <input type="file" accept="image/*" capture="environment" onChange={handleScan} disabled={scanBusy} className="hidden" />
+        </label>
+        {scanError && <p className="mt-2 text-[12px] text-[#A85A3F]">{scanError}</p>}
+        <p className="mt-2 text-[11px] text-[#79705A]">
+          Foto geht nur zur Auswertung an die KI und wird nicht gespeichert.
         </p>
       </Bon>
+
+      {scanResults && (
+        <Bon className="p-4">
+          <SectionLabel>Erkannte Positionen</SectionLabel>
+          {scanResults.map((r) => (
+            <div key={r.id} className="py-1.5 border-b border-[#DCD4C0] last:border-0">
+              {r.zutat ? (
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={r.checked}
+                    onChange={() => toggleScanResult(r.id)}
+                    aria-label={`${r.zutat.name} Preis übernehmen`}
+                  />
+                  <span className="flex-1">{r.zutat.name}</span>
+                  <span className="font-mono text-[12px] text-[#948B72] line-through">{euro(r.zutat.einkaufspreis)}</span>
+                  <span className="font-mono text-[13px] text-[#8C6A1F] font-semibold">{euro(r.preis)}</span>
+                </label>
+              ) : (
+                <div className="flex items-center gap-2 text-sm">
+                  <span className="flex-1 text-[#6B6450]">
+                    {r.artikel} <span className="text-[11px] text-[#79705A]">(kein Treffer)</span>
+                  </span>
+                  <span className="font-mono text-[13px] text-[#79705A]">{euro(r.preis)}</span>
+                  <button type="button" onClick={() => quickAddFromScan(r)} className="text-[11px] underline text-[#5C6B4F] shrink-0">
+                    Anlegen
+                  </button>
+                </div>
+              )}
+            </div>
+          ))}
+          <div className="flex gap-2 mt-3">
+            <button
+              type="button"
+              onClick={() => setScanResults(null)}
+              className="flex-1 py-2 rounded-sm border border-[#B9AF97] text-sm text-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450]"
+            >
+              Verwerfen
+            </button>
+            <button
+              type="button"
+              onClick={applyScanResults}
+              disabled={!scanResults.some((r) => r.zutat && r.checked)}
+              className="flex-1 py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-40"
+            >
+              Preise übernehmen
+            </button>
+          </div>
+        </Bon>
+      )}
     </div>
   );
 }
@@ -1213,6 +1375,12 @@ function MainApp({ session }) {
     );
   };
 
+  const updateZutatPreis = async (id, einkaufspreis) => {
+    const { data, error } = await sb.from("zutaten").update({ einkaufspreis }).eq("id", id).select().single();
+    if (error) { setLoadError(error.message); return; }
+    setZutaten((z) => z.map((x) => (x.id === id ? data : x)));
+  };
+
   const deleteZutat = (zutat) => {
     const verwendetIn = rezepte.filter((r) => r.zutaten.some((l) => l.zutatId === zutat.id));
     if (verwendetIn.length > 0) {
@@ -1277,7 +1445,7 @@ function MainApp({ session }) {
           </Bon>
         ) : (
           <React.Fragment>
-            {tab === "zutaten" && <ZutatenTab zutaten={visibleZutaten} onAdd={addZutat} onDelete={deleteZutat} />}
+            {tab === "zutaten" && <ZutatenTab zutaten={visibleZutaten} onAdd={addZutat} onDelete={deleteZutat} onUpdatePreis={updateZutatPreis} />}
             {tab === "rezepte" && <RezepteTab zutaten={visibleZutaten} rezepte={visibleRezepte} onSave={addRezept} onDelete={deleteRezept} />}
             {tab === "log" && <LogTab rezepte={visibleRezepte} zutaten={visibleZutaten} log={visibleLog} onAdd={addLogEntry} onDelete={deleteLogEntry} />}
             {tab === "dashboard" && <DashboardTab log={visibleLog} />}
