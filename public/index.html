@@ -74,6 +74,7 @@ const SearchIcon = (p) => <Icon {...p}><circle cx="11" cy="11" r="8"/><path d="m
 const SlidersIcon = (p) => <Icon {...p}><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="2" y1="14" x2="6" y2="14"/><line x1="10" y1="8" x2="14" y2="8"/><line x1="18" y1="16" x2="22" y2="16"/></Icon>;
 const PencilIcon = (p) => <Icon {...p}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></Icon>;
 const ChevronLeftIcon = (p) => <Icon {...p}><path d="m15 18-6-6 6-6"/></Icon>;
+const SparklesIcon = (p) => <Icon {...p}><path d="m12 3-1.9 5.8a2 2 0 0 1-1.287 1.288L3 12l5.8 1.9a2 2 0 0 1 1.288 1.287L12 21l1.9-5.8a2 2 0 0 1 1.287-1.288L21 12l-5.8-1.9a2 2 0 0 1-1.288-1.287Z"/></Icon>;
 
 // Weitere Slots einfach ergänzen, z.B. "Zweites Frühstück", "Nachmittag" — keine DB-Änderung nötig.
 const MAHLZEIT_KATEGORIEN = ["Frühstück", "Mittagessen", "Abendessen", "Snack"];
@@ -937,9 +938,15 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
 }
 
 // ---------- Rezepte-Tab ----------
+const REZEPT_ERNAEHRUNG = ["Vegetarisch", "Vegan"];
+
 function RezepteTab({ zutaten, rezepte, onSave, onUpdate, onDelete }) {
+  // subView regelt, welche Sub-Ansicht offen ist ("edit" | "ki" | null). Beide teilen sich
+  // EINEN History-Eintrag (useHistoryFlag), damit ein Wechsel von "ki" zu "edit" (nach einem
+  // generierten Vorschlag) keine zwei sich überschneidenden History-Operationen braucht.
+  const [subView, setSubView] = useState(null);
+  const [subViewOpen, activateSubView, deactivateSubView] = useHistoryFlag("rezeptSub");
   const [editing, setEditing] = useState(null); // rezept object being built
-  const [editingOpen, activateEditing, deactivateEditing] = useHistoryFlag("rezeptEdit");
   const [name, setName] = useState("");
   const [portionen, setPortionen] = useState(1);
   const [lines, setLines] = useState([]); // {zutatId, menge}
@@ -949,9 +956,18 @@ function RezepteTab({ zutaten, rezepte, onSave, onUpdate, onDelete }) {
   const [hint, setHint] = useState("");
   const pickZutatObj = zutaten.find((z) => z.id === pickZutat) || null;
 
+  const [kiKategorie, setKiKategorie] = useState("");
+  const [kiErnaehrung, setKiErnaehrung] = useState("");
+  const [kiFreitext, setKiFreitext] = useState("");
+  const [kiBusy, setKiBusy] = useState(false);
+  const [kiError, setKiError] = useState("");
+
   useEffect(() => {
-    if (!editingOpen) setEditing(null);
-  }, [editingOpen]);
+    if (!subViewOpen) {
+      setSubView(null);
+      setEditing(null);
+    }
+  }, [subViewOpen]);
 
   const startNew = () => {
     setEditing("new");
@@ -959,7 +975,8 @@ function RezepteTab({ zutaten, rezepte, onSave, onUpdate, onDelete }) {
     setPortionen(1);
     setLines([]);
     setHint("");
-    activateEditing();
+    setSubView("edit");
+    activateSubView();
   };
 
   const startEdit = (r) => {
@@ -968,7 +985,79 @@ function RezepteTab({ zutaten, rezepte, onSave, onUpdate, onDelete }) {
     setPortionen(r.portionen);
     setLines(r.zutaten.map((l) => ({ ...l })));
     setHint("");
-    activateEditing();
+    setSubView("edit");
+    activateSubView();
+  };
+
+  const openKi = () => {
+    setKiKategorie("");
+    setKiErnaehrung("");
+    setKiFreitext("");
+    setKiError("");
+    setSubView("ki");
+    activateSubView();
+  };
+
+  const generateKiRezept = async () => {
+    if (zutaten.length === 0) {
+      setKiError("Noch keine Zutaten angelegt — dafür braucht es erst welche im Zutaten-Tab.");
+      return;
+    }
+    setKiBusy(true);
+    setKiError("");
+    try {
+      const zutatenListe = zutaten.map((z) => `${z.name} (${z.kcal100} kcal/${referenzLabel(z.einheit)})`);
+      const vorgaben = [
+        kiKategorie && `Mahlzeit-Kategorie: ${kiKategorie}`,
+        kiErnaehrung && `Ernährungsform: ${kiErnaehrung}`,
+        kiFreitext && `Weitere Wünsche: ${kiFreitext}`,
+      ].filter(Boolean);
+      const text = await callClaude({
+        system:
+          "Du erstellst Rezeptvorschläge für eine Kalorien- und Kosten-Tracking-App. Du bekommst eine Liste bereits vorhandener Zutaten (mit kcal-Angabe) und optionale Vorgaben. Baue daraus ein sinnvolles Rezept unter Verwendung EINES TEILS dieser Zutaten (nicht zwingend aller) — Mengen realistisch für eine übliche Portion wählen. WICHTIG bei der Vorgabe 'Vegan': verwende AUSSCHLIESSLICH pflanzliche Zutaten. Honig, Milch, Milchprodukte, Butter, Eier, Käse, Gelatine, Fleisch und Fisch sind NICHT vegan und dürfen in einem veganen Rezept NICHT vorkommen, auch nicht in kleinen Mengen. Prüfe jede gewählte Zutat einzeln gegen diese Liste, bevor du antwortest. Bei 'Vegetarisch' sind Milchprodukte, Eier und Honig erlaubt, Fleisch und Fisch nicht. Antworte ausschließlich mit reinem JSON, kein Markdown, keine Erklärung außerhalb des JSON. Format bei Erfolg: {\"rezept\":{\"name\":\"\",\"portionen\":1,\"zutaten\":[{\"zutat\":\"\",\"menge\":0}]}}. \"zutat\" muss exakt einer der vorhandenen Namen sein. Format falls sich aus den vorhandenen Zutaten kein sinnvolles Rezept zu den Vorgaben bauen lässt: {\"rezept\":null,\"grund\":\"kurze Erklärung auf Deutsch\"}.",
+        messages: [
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text:
+                  "Vorhandene Zutaten:\n" +
+                  zutatenListe.join("\n") +
+                  (vorgaben.length > 0 ? "\n\nVorgaben:\n" + vorgaben.join("\n") : "\n\nKeine weiteren Vorgaben."),
+              },
+            ],
+          },
+        ],
+        maxTokens: 800,
+      });
+      const parsed = extractJson(text);
+      if (!parsed.rezept) {
+        setKiError(parsed.grund || "Aus den vorhandenen Zutaten ließ sich kein passendes Rezept erstellen.");
+        return;
+      }
+      const vorschlagLines = (parsed.rezept.zutaten || [])
+        .map((l) => {
+          const z = findZutatByName(l.zutat, zutaten);
+          const menge = parseFloat(l.menge);
+          return z && Number.isFinite(menge) && menge > 0 ? { zutatId: z.id, menge } : null;
+        })
+        .filter(Boolean);
+      if (vorschlagLines.length === 0) {
+        setKiError("Der Vorschlag enthielt keine verwendbaren Zutaten-Mengen.");
+        return;
+      }
+      setEditing("new");
+      setName(parsed.rezept.name || "");
+      setPortionen(Number.isFinite(parseFloat(parsed.rezept.portionen)) ? parseFloat(parsed.rezept.portionen) : 1);
+      setLines(vorschlagLines);
+      setHint("");
+      setSubView("edit"); // wechselt innerhalb desselben History-Eintrags, kein Push/Pop nötig
+    } catch (err) {
+      setKiError((err && err.message) || "Vorschlag konnte nicht erstellt werden.");
+    } finally {
+      setKiBusy(false);
+    }
   };
 
   const berechne = (linesArg, portionenArg) => {
@@ -1009,13 +1098,13 @@ function RezepteTab({ zutaten, rezepte, onSave, onUpdate, onDelete }) {
       } else {
         await onSave({ name, portionen, zutaten: lines });
       }
-      deactivateEditing();
+      deactivateSubView();
     } finally {
       setBusy(false);
     }
   };
 
-  if (editing) {
+  if (subView === "edit") {
     const totals = berechne(lines, portionen || 1);
     const isEdit = editing !== "new";
     return (
@@ -1100,7 +1189,7 @@ function RezepteTab({ zutaten, rezepte, onSave, onUpdate, onDelete }) {
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={deactivateEditing}
+            onClick={deactivateSubView}
             className="flex-1 py-2 rounded-sm border border-[#B9AF97] text-sm text-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450]"
           >
             Abbrechen
@@ -1114,6 +1203,86 @@ function RezepteTab({ zutaten, rezepte, onSave, onUpdate, onDelete }) {
           </button>
         </div>
       </form>
+    );
+  }
+
+  if (subView === "ki") {
+    return (
+      <div className="space-y-4 pb-4">
+        <Bon className="p-4">
+          <SectionLabel>Rezept-Vorschlag (KI)</SectionLabel>
+          <p className="text-[12px] text-[#79705A] mb-3">
+            Claude schlägt ein Rezept aus einem Teil deiner vorhandenen Zutaten vor — du kannst es danach anpassen, bevor es gespeichert wird.
+          </p>
+
+          <div className="mb-3">
+            <div className="text-[11px] uppercase tracking-wide text-[#6E6650] mb-1.5">Kategorie (optional)</div>
+            <div className="flex flex-wrap gap-1.5">
+              {MAHLZEIT_KATEGORIEN.map((kat) => (
+                <button
+                  key={kat}
+                  type="button"
+                  onClick={() => setKiKategorie((k) => (k === kat ? "" : kat))}
+                  aria-pressed={kiKategorie === kat}
+                  className={`px-2.5 py-1 rounded-full text-[12px] border ${
+                    kiKategorie === kat ? "bg-[#5C6B4F] text-[#FAF7EF] border-[#5C6B4F]" : "border-[#B9AF97] text-[#6B6450]"
+                  }`}
+                >
+                  {kat}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="mb-3">
+            <div className="text-[11px] uppercase tracking-wide text-[#6E6650] mb-1.5">Ernährungsform (optional)</div>
+            <div className="flex flex-wrap gap-1.5">
+              {REZEPT_ERNAEHRUNG.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => setKiErnaehrung((cur) => (cur === e ? "" : e))}
+                  aria-pressed={kiErnaehrung === e}
+                  className={`px-2.5 py-1 rounded-full text-[12px] border ${
+                    kiErnaehrung === e ? "bg-[#5C6B4F] text-[#FAF7EF] border-[#5C6B4F]" : "border-[#B9AF97] text-[#6B6450]"
+                  }`}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <input
+            placeholder="Weitere Wünsche (optional, z.B. „schnell und wenig Aufwand“)"
+            aria-label="Weitere Wünsche für den Rezept-Vorschlag"
+            value={kiFreitext}
+            onChange={(e) => setKiFreitext(e.target.value)}
+            className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
+          />
+
+          {kiError && <p className="mt-2 text-[12px] text-[#A85A3F]">{kiError}</p>}
+
+          <div className="flex gap-2 mt-4">
+            <button
+              type="button"
+              onClick={deactivateSubView}
+              className="flex-1 py-2 rounded-sm border border-[#B9AF97] text-sm text-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450]"
+            >
+              Abbrechen
+            </button>
+            <button
+              type="button"
+              onClick={generateKiRezept}
+              disabled={kiBusy}
+              className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-50"
+            >
+              {kiBusy ? <LoaderIcon size={15} /> : <SparklesIcon size={15} />}
+              {kiBusy ? "Wird erstellt…" : "Vorschlag generieren"}
+            </button>
+          </div>
+        </Bon>
+      </div>
     );
   }
 
@@ -1140,13 +1309,22 @@ function RezepteTab({ zutaten, rezepte, onSave, onUpdate, onDelete }) {
           </Bon>
         );
       })}
-      <button
-        type="button"
-        onClick={startNew}
-        className="w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28]"
-      >
-        <PlusIcon size={15} /> Neues Rezept
-      </button>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={startNew}
+          className="flex-1 flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28]"
+        >
+          <PlusIcon size={15} /> Neues Rezept
+        </button>
+        <button
+          type="button"
+          onClick={openKi}
+          className="flex-1 flex items-center justify-center gap-1.5 border border-[#B9AF97] text-[#6B6450] text-sm font-medium py-2 rounded-sm hover:bg-[#F0ECDC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450]"
+        >
+          <SparklesIcon size={15} /> Rezept-Vorschlag (KI)
+        </button>
+      </div>
     </div>
   );
 }
@@ -1640,7 +1818,7 @@ function HilfeGuide() {
         <SectionLabel>So funktioniert's</SectionLabel>
         <ol className="space-y-3 text-sm text-[#2B2A28] list-decimal list-inside">
           <li><strong>Zutaten anlegen</strong> — Name, Einheit (g, ml oder Stück), kcal je Einheit und was du beim Einkauf bezahlt hast (Menge + Preis). Preis pro Einheit wird automatisch berechnet.</li>
-          <li><strong>Rezepte bauen</strong> — Zutaten mit ihrer jeweiligen Menge zusammenstellen, kcal und Kosten pro Portion siehst du live.</li>
+          <li><strong>Rezepte bauen</strong> — Zutaten mit ihrer jeweiligen Menge zusammenstellen, kcal und Kosten pro Portion siehst du live. Über "Rezept-Vorschlag (KI)" lässt du dir auch einen Vorschlag aus deinen vorhandenen Zutaten erstellen (mit optionaler Kategorie/Ernährungsform), bearbeitbar vor dem Speichern.</li>
           <li><strong>Mahlzeiten einbuchen</strong> — im Log-Tab ein Rezept, eine Kategorie und einen Portionsfaktor wählen. Mit den Pfeilen im Log-Tab durch vergangene Tage blättern.</li>
           <li><strong>Bilanz ansehen</strong> — Tagesüberblick plus Verlauf über kcal und Kosten der letzten 14 Tage.</li>
         </ol>
