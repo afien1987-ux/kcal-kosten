@@ -1646,6 +1646,63 @@ function MainApp({ session }) {
     else setMenuView(null);
   };
 
+  // Tab-Wechsel landen als eigene History-Einträge, damit der Zurück-Button die zuvor
+  // besuchten Tabs schrittweise durchgeht. Ist die eigene History-Kette komplett
+  // durchlaufen (kein Tab/Menü/Sub-Ansicht mehr im state), würde der nächste Zurück-Schritt
+  // die App verlassen: landet man dann noch nicht auf Zutaten, wird stattdessen dorthin
+  // gesprungen (ohne neuen History-Eintrag — sonst bräuchte es zwei stille Zurück-Schritte
+  // nach dem Toast); ist man schon auf Zutaten, zeigt ein Toast "nochmal zurück zum Beenden"
+  // und genau der nächste Zurück-Schritt lässt die App wirklich schließen. Wird der Versuch
+  // nicht innerhalb des Zeitfensters bestätigt, stellt der Timeout den Guard proaktiv wieder
+  // her, damit ein späterer Versuch erneut frisch warnt statt sofort und ohne Hinweis zu
+  // schließen.
+  const exitArmedRef = React.useRef(false);
+  const exitTimerRef = React.useRef(null);
+
+  useEffect(() => {
+    // { tab: "zutaten" } statt null, damit ein Zurück-Schritt aus einer auf Zutaten geöffneten
+    // Sub-Ansicht (Verwalten-Modus, Rezept-Formular) über den normalen .tab-Zweig unten landet
+    // und NICHT fälschlich als "Boden erreicht" (Exit-Versuch) gewertet wird.
+    history.pushState({ tab: "zutaten" }, ""); // garantiert mind. einen abfangbaren Zurück-Schritt
+  }, []);
+
+  useEffect(() => {
+    const onPopState = (e) => {
+      if (e.state && e.state.tab) {
+        setTab(e.state.tab);
+        return;
+      }
+      if (e.state && (e.state.menuView || e.state.zutatenManage || e.state.rezeptEdit)) {
+        return; // wird vom jeweils zuständigen Handler/Hook behandelt
+      }
+      setTab((currentTab) => {
+        if (currentTab !== "zutaten") return "zutaten";
+        if (!exitArmedRef.current) {
+          exitArmedRef.current = true;
+          clearTimeout(exitTimerRef.current);
+          exitTimerRef.current = setTimeout(() => {
+            exitArmedRef.current = false;
+            history.pushState({ tab: "zutaten" }, ""); // wie der Mount-Guard: .tab-Marker, kein bare null
+            setToast((t) => (t && t.id === "__exit__" ? null : t));
+          }, 2500);
+          setToast({ id: "__exit__", message: "Nochmal zurück drücken zum Beenden" });
+        }
+        // schon armed: nichts tun, der nächste Zurück-Schritt verlässt die App wirklich.
+        return currentTab;
+      });
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const goToTab = (newTab) => {
+    if (newTab === tab) return;
+    exitArmedRef.current = false;
+    clearTimeout(exitTimerRef.current); // Navigation storniert einen wartenden Exit-Guard-Timeout
+    history.pushState({ tab: newTab }, "");
+    setTab(newTab);
+  };
+
   const loadLog = async (dayIso) => {
     setLogLoading(true);
     const von = dayIso;
@@ -1897,9 +1954,11 @@ function MainApp({ session }) {
         <div className="sticky bottom-[60px] px-4 max-w-md w-full mx-auto z-10" role="status">
           <div className="flex items-center justify-between gap-3 bg-[#2B2A28] text-[#FAF7EF] text-sm rounded-sm px-4 py-2.5 shadow-md">
             <span>{toast.message}</span>
-            <button type="button" onClick={toast.onUndo} className="font-semibold underline shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FAF7EF]">
-              Rückgängig
-            </button>
+            {toast.onUndo && (
+              <button type="button" onClick={toast.onUndo} className="font-semibold underline shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FAF7EF]">
+                Rückgängig
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -1912,7 +1971,7 @@ function MainApp({ session }) {
             <button
               type="button"
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => goToTab(t.id)}
               aria-current={active ? "page" : undefined}
               className="flex flex-col items-center gap-0.5 px-3 py-2 min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#5C6B4F]"
             >
