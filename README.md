@@ -31,6 +31,27 @@ und Kosten pro Portion.
    "Confirm email" aktiviert – neue Accounts müssen die Bestätigungsmail
    anklicken, bevor sie sich einloggen können. Das ist bei offenem Sign-up
    sinnvoll und muss nicht geändert werden.
+6. **Authentication → URL Configuration → Site URL**: auf die Worker-URL
+   setzen (z. B. `https://kalorien-kosten-tracker.<dein-subdomain>.workers.dev`),
+   sonst landen Bestätigungs-/Login-Links auf `localhost:3000`.
+
+## 1a. Google-Login aktivieren (optional)
+Die App hat schon einen "Mit Google anmelden"-Button — der funktioniert erst,
+wenn der Google-Provider in Supabase eingerichtet ist:
+
+1. In der [Google Cloud Console](https://console.cloud.google.com/) ein
+   Projekt anlegen (oder ein bestehendes nutzen).
+2. **APIs & Services → OAuth consent screen**: Typ "External", App-Name
+   z. B. "Kalorien & Kosten", eigene E-Mail als Support-/Kontaktadresse.
+3. **APIs & Services → Credentials → Create Credentials → OAuth client ID**,
+   Typ "Web application":
+   - **Authorized JavaScript origins**: die Worker-URL (z. B.
+     `https://kalorien-kosten-tracker.<dein-subdomain>.workers.dev`)
+   - **Authorized redirect URIs**: `https://<dein-projekt>.supabase.co/auth/v1/callback`
+     (Projekt-Ref aus Schritt 1, Abschnitt "Supabase einrichten")
+4. Client-ID und Client-Secret kopieren.
+5. Supabase Dashboard → **Authentication → Providers → Google** → aktivieren,
+   Client-ID + Secret einfügen → Speichern.
 
 ## 2. Repo auf GitHub anlegen
 1. Neues Repo erstellen, z. B. `kalorien-kosten-tracker`.
