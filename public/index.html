@@ -692,9 +692,9 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
 
   return (
     <div className="space-y-4 pb-4">
-      <Bon className="p-4">
-        <div className="flex items-center justify-between gap-2 mb-3">
-          <SectionLabel>Zutaten-Register</SectionLabel>
+      <Bon className="p-3">
+        <div className="flex items-center justify-between gap-2">
+          <SectionLabel>Zutaten</SectionLabel>
           <button
             type="button"
             onClick={() => (manageMode ? deactivateManage() : activateManage())}
@@ -704,36 +704,6 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
             {manageMode ? "Fertig" : "Zutaten verwalten"}
           </button>
         </div>
-        <div className="relative mb-3">
-          <SearchIcon size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#A79E85]" />
-          <input
-            type="search"
-            placeholder="Zutat suchen…"
-            aria-label="Zutaten durchsuchen"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 pl-6 text-sm placeholder:text-[#A79E85]"
-          />
-        </div>
-        {gefiltert.map((z) => (
-          <div key={z.id} className="flex items-center gap-2 py-1 border-b border-[#DCD4C0] last:border-0">
-            <div className="flex-1 min-w-0">
-              <div className="text-[13.5px] font-semibold text-[#2B2A28] break-words">{z.name}</div>
-              <div className="text-[12px] text-[#79705A]">
-                {euro(preisProReferenz(z))}/{referenzLabel(z.einheit)} · {z.kcal100} kcal/{referenzLabel(z.einheit)}
-              </div>
-            </div>
-            {manageMode && (
-              <IconBtn danger label={`${z.name} löschen`} onClick={() => onDelete(z)}>
-                <TrashIcon size={13} />
-              </IconBtn>
-            )}
-          </div>
-        ))}
-        {zutaten.length === 0 && <p className="text-sm text-[#79705A] italic">Noch keine Zutaten angelegt.</p>}
-        {zutaten.length > 0 && gefiltert.length === 0 && (
-          <p className="text-sm text-[#79705A] italic">Keine Zutat gefunden.</p>
-        )}
       </Bon>
 
       {manageMode && (
@@ -830,6 +800,40 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
           </Bon>
         </>
       )}
+
+      <Bon className="p-4">
+        <SectionLabel>Zutaten-Register</SectionLabel>
+        <div className="relative my-3">
+          <SearchIcon size={14} className="absolute left-2 top-1/2 -translate-y-1/2 text-[#A79E85]" />
+          <input
+            type="search"
+            placeholder="Zutat suchen…"
+            aria-label="Zutaten durchsuchen"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 pl-6 text-sm placeholder:text-[#A79E85]"
+          />
+        </div>
+        {gefiltert.map((z) => (
+          <div key={z.id} className="flex items-center gap-2 py-1 border-b border-[#DCD4C0] last:border-0">
+            <div className="flex-1 min-w-0">
+              <div className="text-[13.5px] font-semibold text-[#2B2A28] break-words">{z.name}</div>
+              <div className="text-[12px] text-[#79705A]">
+                {euro(preisProReferenz(z))}/{referenzLabel(z.einheit)} · {z.kcal100} kcal/{referenzLabel(z.einheit)}
+              </div>
+            </div>
+            {manageMode && (
+              <IconBtn danger label={`${z.name} löschen`} onClick={() => onDelete(z)}>
+                <TrashIcon size={13} />
+              </IconBtn>
+            )}
+          </div>
+        ))}
+        {zutaten.length === 0 && <p className="text-sm text-[#79705A] italic">Noch keine Zutaten angelegt.</p>}
+        {zutaten.length > 0 && gefiltert.length === 0 && (
+          <p className="text-sm text-[#79705A] italic">Keine Zutat gefunden.</p>
+        )}
+      </Bon>
 
       {scanResults && (
         <Bon className="p-4">
