@@ -15,6 +15,12 @@ und Kosten pro Portion.
   Bestätigung in einer Review-Liste übernommen. Fotos werden nicht
   gespeichert. Braucht den Anthropic API-Key aus Abschnitt 5 – ohne den
   zeigt der Scan-Button einen Fehler.
+- **Artikel-Scan (Barcode) ist aktiv** (Zutaten-Tab → "Artikel scannen").
+  Füllt Name + kcal/100g über die kostenlose OpenFoodFacts-API. Barcode wird
+  zuerst geräteseitig gelesen (kostenlos, kein API-Call); nur falls das
+  Gerät/der Browser das nicht unterstützt (z. B. iOS Safari), springt als
+  Fallback ein Claude-Vision-Call ein – braucht dann ebenfalls den
+  Anthropic API-Key aus Abschnitt 5.
 
 ## 1. Supabase einrichten
 1. Auf https://supabase.com registrieren/einloggen, neues Projekt anlegen
