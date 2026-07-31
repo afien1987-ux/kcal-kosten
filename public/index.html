@@ -589,7 +589,7 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
         system:
           "Du liest deutsche Kassenzettel (Kassenbons) aus Fotos aus. Extrahiere jede Artikelposition mit Name und tatsächlich bezahltem Preis (Rabatte, sofern der Position direkt zuordenbar, bereits eingerechnet). Ordne jede Position außerdem, falls passend, einer der folgenden bereits vorhandenen Zutaten zu — auch bei Abkürzungen, Markennamen oder Mengenangaben auf dem Bon (z.B. \"HAFERFL. KOELLN 500G\" passt zu \"Haferflocken\"). Bestehende Zutaten: " +
           JSON.stringify(namenListe) +
-          '. Antworte ausschließlich mit reinem JSON, kein Markdown, keine Erklärung außerhalb des JSON. Format: {"positionen":[{"artikel":"","preis":0.00,"zutat":null}]}. "zutat" ist entweder exakt einer der Namen aus der Liste oder null, wenn keiner passt. Ignoriere Pfand, Summen-/Gesamtzeilen und Werbetexte.',
+          '. Gib für Positionen OHNE passende Zutat zusätzlich dein geschätztes kcal-Wissen zu diesem Produkt an (kcal pro 100g bzw. 100ml, basierend auf typischen Nährwertangaben für dieses oder vergleichbare Produkte) — nur wenn du dir einigermaßen sicher bist, sonst null. Antworte ausschließlich mit reinem JSON, kein Markdown, keine Erklärung außerhalb des JSON. Format: {"positionen":[{"artikel":"","preis":0.00,"zutat":null,"geschaetzteKcal100":null}]}. "zutat" ist entweder exakt einer der Namen aus der Liste oder null, wenn keiner passt. "geschaetzteKcal100" ist eine Zahl oder null. Ignoriere Pfand, Summen-/Gesamtzeilen und Werbetexte.',
         messages: [
           {
             role: "user",
@@ -606,12 +606,27 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
       if (positionen.length === 0) {
         setScanError("Auf dem Foto konnten keine Artikel erkannt werden.");
       } else {
-        setScanResults(
-          positionen.map((p, i) => {
-            const zutat = findZutatByName(p.zutat, zutaten);
-            return { id: i, artikel: p.artikel, preis: p.preis, zutat, checked: !!zutat };
-          })
-        );
+        const results = positionen.map((p, i) => {
+          const zutat = findZutatByName(p.zutat, zutaten);
+          const kcalSchaetzung = typeof p.geschaetzteKcal100 === "number" ? p.geschaetzteKcal100 : null;
+          return zutat
+            ? { id: i, artikel: p.artikel, preis: p.preis, zutat, checked: true }
+            : {
+                id: i,
+                artikel: p.artikel,
+                preis: p.preis,
+                zutat: null,
+                checked: false,
+                name: p.artikel,
+                einheit: "g",
+                kcal100: kcalSchaetzung != null ? String(kcalSchaetzung) : "",
+                einkaufsmenge: "",
+                kcalGeschaetzt: kcalSchaetzung != null,
+                draftBusy: false,
+                draftHint: "",
+              };
+        });
+        setScanResults(results);
       }
     } catch (err) {
       setScanError((err && err.message) || "Kassenzettel konnte nicht ausgewertet werden.");
@@ -630,9 +645,24 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
     setScanResults(null);
   };
 
-  const quickAddFromScan = (r) => {
-    setForm({ name: r.artikel, kcal100: "", einkaufsmenge: "", einkaufspreis: String(r.preis) });
-    setScanResults((rs) => rs.filter((x) => x.id !== r.id));
+  const updateScanDraft = (id, patch) => {
+    setScanResults((rs) => rs.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+  };
+
+  const addFromScan = async (r) => {
+    const kcal100 = parseFloat(r.kcal100);
+    const einkaufsmenge = parseFloat(r.einkaufsmenge);
+    if (!r.name || ![kcal100, einkaufsmenge].every((n) => Number.isFinite(n) && n > 0)) {
+      updateScanDraft(r.id, { draftHint: "Bitte kcal und Einkaufsmenge als positive Zahl angeben." });
+      return;
+    }
+    updateScanDraft(r.id, { draftBusy: true, draftHint: "" });
+    const ok = await onAdd({ name: r.name, kcal100, einheit: r.einheit, einkaufsmenge, einkaufspreis: r.preis });
+    if (ok) {
+      setScanResults((rs) => rs && rs.filter((x) => x.id !== r.id));
+    } else {
+      updateScanDraft(r.id, { draftBusy: false, draftHint: "Speichern fehlgeschlagen — bitte erneut versuchen." });
+    }
   };
 
   const add = async (e) => {
@@ -651,8 +681,9 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
     setHint("");
     setBusy(true);
     try {
-      await onAdd({ name: form.name, kcal100, einheit: form.einheit, einkaufsmenge, einkaufspreis });
-      setForm({ name: "", kcal100: "", einheit: form.einheit, einkaufsmenge: "", einkaufspreis: "" });
+      const ok = await onAdd({ name: form.name, kcal100, einheit: form.einheit, einkaufsmenge, einkaufspreis });
+      if (ok) setForm({ name: "", kcal100: "", einheit: form.einheit, einkaufsmenge: "", einkaufspreis: "" });
+      else setHint("Speichern fehlgeschlagen — bitte erneut versuchen.");
     } finally {
       setBusy(false);
     }
@@ -816,13 +847,67 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
                   <span className="font-mono text-[13px] text-[#8C6A1F] font-semibold">{euro(r.preis)}</span>
                 </label>
               ) : (
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="flex-1 text-[#6B6450]">
-                    {r.artikel} <span className="text-[11px] text-[#79705A]">(kein Treffer)</span>
-                  </span>
-                  <span className="font-mono text-[13px] text-[#79705A]">{euro(r.preis)}</span>
-                  <button type="button" onClick={() => quickAddFromScan(r)} className="text-[11px] underline text-[#5C6B4F] shrink-0">
-                    Anlegen
+                <div className="text-sm">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <span className="flex-1 text-[11px] text-[#79705A]">
+                      Kassenzettel: „{r.artikel}“ <span className="text-[#948B72]">(kein Treffer)</span>
+                    </span>
+                    <span className="font-mono text-[13px] text-[#79705A] shrink-0">{euro(r.preis)}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <input
+                      placeholder="Name"
+                      aria-label="Name der neuen Zutat"
+                      value={r.name}
+                      onChange={(e) => updateScanDraft(r.id, { name: e.target.value })}
+                      className="col-span-2 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-[13px]"
+                    />
+                    <input
+                      placeholder={`kcal / ${referenzLabel(r.einheit)}`}
+                      aria-label={`Kilokalorien pro ${referenzLabel(r.einheit)}`}
+                      type="number"
+                      inputMode="decimal"
+                      min="0.01"
+                      step="any"
+                      value={r.kcal100}
+                      onChange={(e) => updateScanDraft(r.id, { kcal100: e.target.value })}
+                      className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-[13px]"
+                    />
+                    <select
+                      value={r.einheit}
+                      aria-label="Einheit"
+                      onChange={(e) => updateScanDraft(r.id, { einheit: e.target.value })}
+                      className="bg-transparent border-b border-[#B9AF97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-[13px]"
+                    >
+                      {EINHEITEN.map((e) => (
+                        <option key={e} value={e}>
+                          {e}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      placeholder={`Einkaufsmenge (${r.einheit})`}
+                      aria-label={`Einkaufsmenge in ${r.einheit}`}
+                      type="number"
+                      inputMode="decimal"
+                      min="0.01"
+                      step="any"
+                      value={r.einkaufsmenge}
+                      onChange={(e) => updateScanDraft(r.id, { einkaufsmenge: e.target.value })}
+                      className="col-span-2 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-[13px]"
+                    />
+                  </div>
+                  {r.kcalGeschaetzt && (
+                    <p className="text-[11px] text-[#5C6B4F] mt-1">kcal geschätzt, keine Garantie — bitte prüfen.</p>
+                  )}
+                  {r.draftHint && <p className="text-[11px] text-[#A85A3F] mt-1">{r.draftHint}</p>}
+                  <button
+                    type="button"
+                    onClick={() => addFromScan(r)}
+                    disabled={r.draftBusy}
+                    className="mt-1.5 w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-[12px] font-medium py-1.5 rounded-sm hover:bg-[#4C5A41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-50"
+                  >
+                    <PlusIcon size={13} /> Als neue Zutat anlegen
                   </button>
                 </div>
               )}
@@ -1812,8 +1897,9 @@ function MainApp({ session }) {
 
   const addZutat = async (werte) => {
     const { data, error } = await sb.from("zutaten").insert(werte).select().single();
-    if (error) { setLoadError(error.message); return; }
+    if (error) { setLoadError(error.message); return false; }
     setZutaten((z) => [...z, data]);
+    return true;
   };
 
   const addRezept = async ({ name, portionen, zutaten: lines }) => {
