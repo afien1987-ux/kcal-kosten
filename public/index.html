@@ -43,6 +43,8 @@ const XIcon = (p) => <Icon {...p}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></
 const FlameIcon = (p) => <Icon {...p}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></Icon>;
 const CoinsIcon = (p) => <Icon {...p}><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></Icon>;
 const LogOutIcon = (p) => <Icon {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></Icon>;
+const EyeIcon = (p) => <Icon {...p}><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></Icon>;
+const EyeOffIcon = (p) => <Icon {...p}><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></Icon>;
 
 // Weitere Slots einfach ergänzen, z.B. "Zweites Frühstück", "Nachmittag" — keine DB-Änderung nötig.
 const MAHLZEIT_KATEGORIEN = ["Frühstück", "Mittagessen", "Abendessen", "Snack"];
@@ -101,6 +103,7 @@ function SectionLabel({ children }) {
 function IconBtn({ onClick, children, danger, label }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       aria-label={label}
       className={`min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#6B6450] ${
@@ -133,9 +136,19 @@ function AuthScreen() {
   const [mode, setMode] = useState("login"); // "login" | "signup"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
+
+  const switchMode = (next) => {
+    if (mode === next) return;
+    setMode(next);
+    setError("");
+    setInfo("");
+    setPasswordConfirm("");
+  };
 
   const friendlyAuthError = (err) => {
     if (!err) return "";
@@ -151,6 +164,10 @@ function AuthScreen() {
     e.preventDefault();
     setError("");
     setInfo("");
+    if (mode === "signup" && password !== passwordConfirm) {
+      setError("Passwörter stimmen nicht überein.");
+      return;
+    }
     setBusy(true);
     try {
       if (mode === "login") {
@@ -184,8 +201,32 @@ function AuthScreen() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-6" style={{ background: "#EFEADA", fontFamily: "'Inter', system-ui, sans-serif" }}>
       <Bon className="p-5 w-full max-w-sm">
-        <h1 className="text-[19px] font-bold tracking-tight text-[#2B2A28] mb-1">Kalorien &amp; Kosten</h1>
-        <p className="text-[12px] text-[#6E6650] mb-4">{mode === "login" ? "Anmelden" : "Konto erstellen"}</p>
+        <h1 className="text-[19px] font-bold tracking-tight text-[#2B2A28] mb-4">Kalorien &amp; Kosten</h1>
+
+        <div className="flex rounded-sm border border-[#B9AF97] overflow-hidden mb-4" role="tablist" aria-label="Anmelden oder registrieren">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "login"}
+            onClick={() => switchMode("login")}
+            className={`flex-1 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#2B2A28] ${
+              mode === "login" ? "bg-[#5C6B4F] text-[#FAF7EF]" : "bg-transparent text-[#6B6450] hover:bg-[#F0ECDC]"
+            }`}
+          >
+            Anmelden
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === "signup"}
+            onClick={() => switchMode("signup")}
+            className={`flex-1 py-2 text-sm font-medium transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#2B2A28] ${
+              mode === "signup" ? "bg-[#5C6B4F] text-[#FAF7EF]" : "bg-transparent text-[#6B6450] hover:bg-[#F0ECDC]"
+            }`}
+          >
+            Registrieren
+          </button>
+        </div>
 
         <button
           type="button"
@@ -218,17 +259,41 @@ function AuthScreen() {
             onChange={(e) => setEmail(e.target.value)}
             className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1.5 text-sm placeholder:text-[#A79E85]"
           />
-          <input
-            type="password"
-            required
-            minLength={6}
-            aria-label="Passwort"
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-            placeholder="Passwort (mind. 6 Zeichen)"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1.5 text-sm placeholder:text-[#A79E85]"
-          />
+          <div className="relative">
+            <input
+              type={showPassword ? "text" : "password"}
+              required
+              minLength={6}
+              aria-label="Passwort"
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              placeholder="Passwort (mind. 6 Zeichen)"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1.5 pr-8 text-sm placeholder:text-[#A79E85]"
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((s) => !s)}
+              aria-label={showPassword ? "Passwort verbergen" : "Passwort anzeigen"}
+              className="absolute right-0 top-1/2 -translate-y-1/2 p-1.5 text-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F]"
+            >
+              {showPassword ? <EyeOffIcon size={16} /> : <EyeIcon size={16} />}
+            </button>
+          </div>
+
+          {mode === "signup" && (
+            <input
+              type={showPassword ? "text" : "password"}
+              required
+              minLength={6}
+              aria-label="Passwort bestätigen"
+              autoComplete="new-password"
+              placeholder="Passwort bestätigen"
+              value={passwordConfirm}
+              onChange={(e) => setPasswordConfirm(e.target.value)}
+              className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1.5 text-sm placeholder:text-[#A79E85]"
+            />
+          )}
 
           {error && <p className="text-[12px] text-[#A85A3F]">{error}</p>}
           {info && <p className="text-[12px] text-[#5C6B4F]">{info}</p>}
@@ -238,16 +303,9 @@ function AuthScreen() {
             disabled={busy}
             className="w-full py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-50"
           >
-            {mode === "login" ? "Anmelden" : "Registrieren"}
+            {busy ? (mode === "login" ? "Anmelden…" : "Registrieren…") : (mode === "login" ? "Anmelden" : "Registrieren")}
           </button>
         </form>
-
-        <button
-          onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); setInfo(""); }}
-          className="mt-3 w-full text-center text-[12px] text-[#6B6450] underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5C6B4F]"
-        >
-          {mode === "login" ? "Noch kein Konto? Registrieren" : "Schon ein Konto? Anmelden"}
-        </button>
       </Bon>
 
       <footer className="mt-4 text-center text-[11px] text-[#6E6650]">
@@ -265,20 +323,23 @@ function ZutatenTab({ zutaten, onAdd }) {
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState("");
 
-  const add = async () => {
+  const add = async (e) => {
+    e.preventDefault();
     if (!form.name || !form.kcal100 || !form.einkaufsmenge || !form.einkaufspreis) {
       setHint("Bitte alle Felder ausfüllen.");
+      return;
+    }
+    const kcal100 = parseFloat(form.kcal100);
+    const einkaufsmenge = parseFloat(form.einkaufsmenge);
+    const einkaufspreis = parseFloat(form.einkaufspreis);
+    if (![kcal100, einkaufsmenge, einkaufspreis].every((n) => Number.isFinite(n) && n > 0)) {
+      setHint("kcal, Menge und Preis müssen positive Zahlen sein.");
       return;
     }
     setHint("");
     setBusy(true);
     try {
-      await onAdd({
-        name: form.name,
-        kcal100: parseFloat(form.kcal100),
-        einkaufsmenge: parseFloat(form.einkaufsmenge),
-        einkaufspreis: parseFloat(form.einkaufspreis),
-      });
+      await onAdd({ name: form.name, kcal100, einkaufsmenge, einkaufspreis });
       setForm({ name: "", kcal100: "", einkaufsmenge: "", einkaufspreis: "" });
     } finally {
       setBusy(false);
@@ -303,51 +364,60 @@ function ZutatenTab({ zutaten, onAdd }) {
 
       <Bon className="p-4">
         <SectionLabel>Neue Zutat erfassen</SectionLabel>
-        <div className="grid grid-cols-2 gap-2">
-          <input
-            placeholder="Name"
-            aria-label="Name der Zutat"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-            className="col-span-2 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
-          />
-          <input
-            placeholder="kcal / 100g"
-            aria-label="Kilokalorien pro 100 Gramm"
-            type="number"
-            inputMode="decimal"
-            value={form.kcal100}
-            onChange={(e) => setForm({ ...form, kcal100: e.target.value })}
-            className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
-          />
-          <input
-            placeholder="Einkaufsmenge (g)"
-            aria-label="Einkaufsmenge in Gramm"
-            type="number"
-            inputMode="decimal"
-            value={form.einkaufsmenge}
-            onChange={(e) => setForm({ ...form, einkaufsmenge: e.target.value })}
-            className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
-          />
-          <input
-            placeholder="Einkaufspreis (€)"
-            aria-label="Einkaufspreis in Euro"
-            type="number"
-            step="0.01"
-            inputMode="decimal"
-            value={form.einkaufspreis}
-            onChange={(e) => setForm({ ...form, einkaufspreis: e.target.value })}
-            className="col-span-2 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
-          />
-        </div>
-        {hint && <p className="mt-2 text-[12px] text-[#A85A3F]">{hint}</p>}
-        <button
-          onClick={add}
-          disabled={busy}
-          className="mt-3 w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-50"
-        >
-          <PlusIcon size={15} /> Zutat speichern
-        </button>
+        <form onSubmit={add}>
+          <div className="grid grid-cols-2 gap-2">
+            <input
+              placeholder="Name"
+              aria-label="Name der Zutat"
+              required
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              className="col-span-2 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
+            />
+            <input
+              placeholder="kcal / 100g"
+              aria-label="Kilokalorien pro 100 Gramm"
+              type="number"
+              inputMode="decimal"
+              required
+              min="0.01"
+              value={form.kcal100}
+              onChange={(e) => setForm({ ...form, kcal100: e.target.value })}
+              className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
+            />
+            <input
+              placeholder="Einkaufsmenge (g)"
+              aria-label="Einkaufsmenge in Gramm"
+              type="number"
+              inputMode="decimal"
+              required
+              min="0.01"
+              value={form.einkaufsmenge}
+              onChange={(e) => setForm({ ...form, einkaufsmenge: e.target.value })}
+              className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
+            />
+            <input
+              placeholder="Einkaufspreis (€)"
+              aria-label="Einkaufspreis in Euro"
+              type="number"
+              step="0.01"
+              inputMode="decimal"
+              required
+              min="0.01"
+              value={form.einkaufspreis}
+              onChange={(e) => setForm({ ...form, einkaufspreis: e.target.value })}
+              className="col-span-2 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
+            />
+          </div>
+          {hint && <p className="mt-2 text-[12px] text-[#A85A3F]">{hint}</p>}
+          <button
+            type="submit"
+            disabled={busy}
+            className="mt-3 w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-50"
+          >
+            <PlusIcon size={15} /> Zutat speichern
+          </button>
+        </form>
         <p className="mt-2 text-[11px] text-[#79705A] flex items-center gap-1">
           <ReceiptIcon size={12} /> Kassenzettel-Scan folgt als eigener Import-Weg (Prototyp: manuell).
         </p>
@@ -387,13 +457,19 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
   };
 
   const addLine = () => {
-    if (!pickZutat || !pickMenge) return;
-    setLines((l) => [...l, { zutatId: pickZutat, menge: parseFloat(pickMenge) }]);
+    const menge = parseFloat(pickMenge);
+    if (!pickZutat || !Number.isFinite(menge) || menge <= 0) {
+      setHint("Bitte eine Zutat und eine Menge über 0g angeben.");
+      return;
+    }
+    setHint("");
+    setLines((l) => [...l, { zutatId: pickZutat, menge }]);
     setPickZutat("");
     setPickMenge("");
   };
 
-  const save = async () => {
+  const save = async (e) => {
+    e.preventDefault();
     if (!name || lines.length === 0) {
       setHint(!name ? "Bitte einen Namen für das Rezept eingeben." : "Bitte mindestens eine Zutat hinzufügen.");
       return;
@@ -411,12 +487,13 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
   if (editing) {
     const totals = berechne(lines, portionen || 1);
     return (
-      <div className="space-y-4 pb-4">
+      <form onSubmit={save} className="space-y-4 pb-4">
         <Bon className="p-4">
           <SectionLabel>Rezept zusammenstellen</SectionLabel>
           <input
             placeholder="Name des Rezepts"
             aria-label="Name des Rezepts"
+            required
             value={name}
             onChange={(e) => setName(e.target.value)}
             className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm mb-2 placeholder:text-[#A79E85]"
@@ -464,8 +541,10 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
               aria-label="Menge in Gramm"
               type="number"
               inputMode="decimal"
+              min="0.01"
               value={pickMenge}
               onChange={(e) => setPickMenge(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addLine(); } }}
               className="w-16 bg-transparent border-b border-[#B9AF97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm"
             />
             <IconBtn label="Zutat zum Rezept hinzufügen" onClick={addLine}>
@@ -487,20 +566,21 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
 
         <div className="flex gap-2">
           <button
+            type="button"
             onClick={() => setEditing(null)}
             className="flex-1 py-2 rounded-sm border border-[#B9AF97] text-sm text-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450]"
           >
             Abbrechen
           </button>
           <button
-            onClick={save}
+            type="submit"
             disabled={busy}
             className="flex-1 py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-50"
           >
             Rezept speichern
           </button>
         </div>
-      </div>
+      </form>
     );
   }
 
@@ -520,6 +600,7 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
         );
       })}
       <button
+        type="button"
         onClick={startNew}
         className="w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28]"
       >
@@ -551,10 +632,15 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
 
   const heute = new Date().toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
 
-  const addEntry = async () => {
+  const addEntry = async (e) => {
+    e.preventDefault();
     const rezept = rezepte.find((r) => r.id === rezeptId);
     if (!rezept) {
       setHint("Bitte ein Rezept auswählen.");
+      return;
+    }
+    if (!Number.isFinite(faktor) || faktor <= 0) {
+      setHint("Der Portionsfaktor muss größer als 0 sein.");
       return;
     }
     setHint("");
@@ -577,6 +663,7 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
     <div className="space-y-4 pb-4">
       <Bon className="p-4">
         <SectionLabel>Mahlzeit einbuchen — {heute}</SectionLabel>
+        <form onSubmit={addEntry}>
         <select
           value={kategorie}
           aria-label="Mahlzeit-Kategorie"
@@ -616,12 +703,13 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
         </div>
         {hint && <p className="text-[12px] text-[#A85A3F] mb-2">{hint}</p>}
         <button
-          onClick={addEntry}
+          type="submit"
           disabled={busy}
           className="w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-50"
         >
           <PlusIcon size={15} /> Einbuchen ({faktor}× Portion)
         </button>
+        </form>
       </Bon>
 
       <Bon className="p-4">
@@ -800,6 +888,7 @@ function MainApp({ session }) {
           </p>
         </div>
         <button
+          type="button"
           onClick={() => sb.auth.signOut()}
           className="flex items-center gap-1 text-[11px] text-[#6E6650] hover:text-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450] pt-1"
           title={session.user.email}
@@ -836,6 +925,7 @@ function MainApp({ session }) {
           const active = tab === t.id;
           return (
             <button
+              type="button"
               key={t.id}
               onClick={() => setTab(t.id)}
               aria-current={active ? "page" : undefined}
