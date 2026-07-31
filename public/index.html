@@ -137,6 +137,16 @@ function AuthScreen() {
   const [error, setError] = useState("");
   const [info, setInfo] = useState("");
 
+  const friendlyAuthError = (err) => {
+    if (!err) return "";
+    const msg = (err.message || "").trim();
+    if (!msg || msg === "{}") {
+      console.error("Auth error ohne verwertbare Meldung:", err);
+      return "Der Server hat einen Fehler gemeldet, ohne Details zu liefern (oft ein SMTP-/E-Mail-Versandproblem). Details siehe Supabase-Dashboard → Logs → Auth Logs.";
+    }
+    return msg;
+  };
+
   const submit = async (e) => {
     e.preventDefault();
     setError("");
@@ -145,15 +155,17 @@ function AuthScreen() {
     try {
       if (mode === "login") {
         const { error: err } = await sb.auth.signInWithPassword({ email, password });
-        if (err) setError(err.message);
+        if (err) setError(friendlyAuthError(err));
       } else {
         const { data, error: err } = await sb.auth.signUp({ email, password });
         if (err) {
-          setError(err.message);
+          setError(friendlyAuthError(err));
         } else if (!data.session) {
           setInfo("Fast geschafft — Bestätigungslink wurde an deine E-Mail geschickt.");
         }
       }
+    } catch (e) {
+      setError(friendlyAuthError(e) || "Unerwarteter Fehler. Bitte erneut versuchen.");
     } finally {
       setBusy(false);
     }
@@ -166,7 +178,7 @@ function AuthScreen() {
       provider: "google",
       options: { redirectTo: window.location.origin },
     });
-    if (err) setError(err.message);
+    if (err) setError(friendlyAuthError(err));
   };
 
   return (
