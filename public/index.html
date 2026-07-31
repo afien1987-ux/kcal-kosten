@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Kalorien & Kosten</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<style>
+  html, body { background: #EFEADA; margin: 0; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel" data-presets="react">
+const { useState, useMemo } = React;
+
+/* ---- einfache SVG-Icons (kein lucide-react nötig ohne Build-Schritt) ---- */
+const Icon = ({ children, size = 18, color, className = "" }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"}
+       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+    {children}
+  </svg>
+);
+const PlusIcon = (p) => <Icon {...p}><path d="M5 12h14"/><path d="M12 5v14"/></Icon>;
+const TrashIcon = (p) => <Icon {...p}><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></Icon>;
+const ReceiptIcon = (p) => <Icon {...p}><path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M16 8h-6"/><path d="M14 12h-4"/></Icon>;
+const BookOpenIcon = (p) => <Icon {...p}><path d="M12 7v14"/><path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z"/></Icon>;
+const CalendarIcon = (p) => <Icon {...p}><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4"/><path d="M8 2v4"/><path d="M3 10h18"/></Icon>;
+const DashboardIcon = (p) => <Icon {...p}><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></Icon>;
+const XIcon = (p) => <Icon {...p}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></Icon>;
+const FlameIcon = (p) => <Icon {...p}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></Icon>;
+const CoinsIcon = (p) => <Icon {...p}><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></Icon>;
+
+// ---------- Hilfsfunktionen ----------
+const euro = (n) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
+const kcalFmt = (n) => Math.round(n).toLocaleString("de-DE");
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+const preisPro100g = (z) => (z.einkaufsmenge > 0 ? (z.einkaufspreis / z.einkaufsmenge) * 100 : 0);
+
+const initialZutaten = [
+  { id: "z1", name: "Haferflocken", kcal100: 372, einkaufsmenge: 500, einkaufspreis: 1.49 },
+  { id: "z2", name: "Haselnüsse gehackt", kcal100: 646, einkaufsmenge: 200, einkaufspreis: 2.99 },
+  { id: "z3", name: "Heidelbeeren TK", kcal100: 42, einkaufsmenge: 300, einkaufspreis: 2.29 },
+  { id: "z4", name: "Vollmilch", kcal100: 64, einkaufsmenge: 1000, einkaufspreis: 1.19 },
+];
+
+const initialRezepte = [
+  {
+    id: "r1",
+    name: "Morgen-Müsli",
+    portionen: 1,
+    zutaten: [
+      { zutatId: "z1", menge: 60 },
+      { zutatId: "z2", menge: 15 },
+      { zutatId: "z3", menge: 50 },
+      { zutatId: "z4", menge: 150 },
+    ],
+  },
+];
+
+// ---------- Kleine UI-Bausteine im Kassenbon-Stil ----------
+function Bon({ children, className = "" }) {
+  return (
+    <div
+      className={`relative bg-[#FAF7EF] border border-[#DCD4C0] rounded-sm shadow-sm ${className}`}
+      style={{
+        backgroundImage:
+          "repeating-linear-gradient(transparent, transparent 27px, #ECE6D6 28px)",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function DottedRow({ left, right, sub, bold, accent }) {
+  return (
+    <div className="flex items-baseline gap-2 py-0.5">
+      <span className={`whitespace-nowrap text-[13.5px] ${bold ? "font-semibold" : ""}`} style={{ color: "#2B2A28" }}>
+        {left}
+      </span>
+      <span className="flex-1 border-b border-dotted translate-y-[-3px]" style={{ borderColor: "#B9AF97" }} />
+      <span
+        className={`whitespace-nowrap font-mono text-[13.5px] ${bold ? "font-bold" : ""}`}
+        style={{ color: accent || "#2B2A28" }}
+      >
+        {right}
+      </span>
+      {sub && <span className="text-[11px] text-[#948B72] ml-1">{sub}</span>}
+    </div>
+  );
+}
+
+function SectionLabel({ children }) {
+  return (
+    <div className="text-[10.5px] tracking-[0.18em] uppercase font-semibold mb-2" style={{ color: "#8A8163" }}>
+      {children}
+    </div>
+  );
+}
+
+function IconBtn({ onClick, children, danger }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`p-1.5 rounded-full transition-colors ${
+        danger ? "hover:bg-[#F0DCD4] text-[#A85A3F]" : "hover:bg-[#E9E3D2] text-[#6B6450]"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+// ---------- Zutaten-Tab ----------
+function ZutatenTab({ zutaten, setZutaten }) {
+  const [form, setForm] = useState({ name: "", kcal100: "", einkaufsmenge: "", einkaufspreis: "" });
+
+  const add = () => {
+    if (!form.name || !form.kcal100 || !form.einkaufsmenge || !form.einkaufspreis) return;
+    setZutaten((z) => [
+      ...z,
+      {
+        id: uid(),
+        name: form.name,
+        kcal100: parseFloat(form.kcal100),
+        einkaufsmenge: parseFloat(form.einkaufsmenge),
+        einkaufspreis: parseFloat(form.einkaufspreis),
+      },
+    ]);
+    setForm({ name: "", kcal100: "", einkaufsmenge: "", einkaufspreis: "" });
+  };
+
+  return (
+    <div className="space-y-4 pb-4">
+      <Bon className="p-4">
+        <SectionLabel>Zutaten-Register</SectionLabel>
+        {zutaten.map((z) => (
+          <div key={z.id} className="group">
+            <DottedRow
+              left={z.name}
+              right={`${euro(preisPro100g(z))}/100g`}
+              sub={`${z.kcal100} kcal/100g`}
+            />
+          </div>
+        ))}
+        {zutaten.length === 0 && <p className="text-sm text-[#948B72] italic">Noch keine Zutaten angelegt.</p>}
+      </Bon>
+
+      <Bon className="p-4">
+        <SectionLabel>Neue Zutat erfassen</SectionLabel>
+        <div className="grid grid-cols-2 gap-2">
+          <input
+            placeholder="Name"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+            className="col-span-2 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] outline-none py-1 text-sm placeholder:text-[#A79E85]"
+          />
+          <input
+            placeholder="kcal / 100g"
+            type="number"
+            value={form.kcal100}
+            onChange={(e) => setForm({ ...form, kcal100: e.target.value })}
+            className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] outline-none py-1 text-sm placeholder:text-[#A79E85]"
+          />
+          <input
+            placeholder="Einkaufsmenge (g)"
+            type="number"
+            value={form.einkaufsmenge}
+            onChange={(e) => setForm({ ...form, einkaufsmenge: e.target.value })}
+            className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] outline-none py-1 text-sm placeholder:text-[#A79E85]"
+          />
+          <input
+            placeholder="Einkaufspreis (€)"
+            type="number"
+            step="0.01"
+            value={form.einkaufspreis}
+            onChange={(e) => setForm({ ...form, einkaufspreis: e.target.value })}
+            className="col-span-2 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] outline-none py-1 text-sm placeholder:text-[#A79E85]"
+          />
+        </div>
+        <button
+          onClick={add}
+          className="mt-3 w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] transition-colors"
+        >
+          <PlusIcon size={15} /> Zutat speichern
+        </button>
+        <p className="mt-2 text-[11px] text-[#948B72] flex items-center gap-1">
+          <ReceiptIcon size={12} /> Kassenzettel-Scan folgt als eigener Import-Weg (Prototyp: manuell).
+        </p>
+      </Bon>
+    </div>
+  );
+}
+
+// ---------- Rezepte-Tab ----------
+function RezepteTab({ zutaten, rezepte, setRezepte }) {
+  const [editing, setEditing] = useState(null); // rezept object being built
+  const [name, setName] = useState("");
+  const [portionen, setPortionen] = useState(1);
+  const [lines, setLines] = useState([]); // {zutatId, menge}
+  const [pickZutat, setPickZutat] = useState("");
+  const [pickMenge, setPickMenge] = useState("");
+
+  const startNew = () => {
+    setEditing("new");
+    setName("");
+    setPortionen(1);
+    setLines([]);
+  };
+
+  const berechne = (linesArg, portionenArg) => {
+    let kcal = 0, kosten = 0;
+    linesArg.forEach((l) => {
+      const z = zutaten.find((zz) => zz.id === l.zutatId);
+      if (!z) return;
+      kcal += (z.kcal100 / 100) * l.menge;
+      kosten += (preisPro100g(z) / 100) * l.menge;
+    });
+    return { kcal, kosten, kcalPortion: kcal / portionenArg, kostenPortion: kosten / portionenArg };
+  };
+
+  const addLine = () => {
+    if (!pickZutat || !pickMenge) return;
+    setLines((l) => [...l, { zutatId: pickZutat, menge: parseFloat(pickMenge) }]);
+    setPickZutat("");
+    setPickMenge("");
+  };
+
+  const save = () => {
+    if (!name || lines.length === 0) return;
+    setRezepte((r) => [...r, { id: uid(), name, portionen, zutaten: lines }]);
+    setEditing(null);
+  };
+
+  if (editing) {
+    const totals = berechne(lines, portionen || 1);
+    return (
+      <div className="space-y-4 pb-4">
+        <Bon className="p-4">
+          <SectionLabel>Rezept zusammenstellen</SectionLabel>
+          <input
+            placeholder="Name des Rezepts"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] outline-none py-1 text-sm mb-2 placeholder:text-[#A79E85]"
+          />
+          <div className="flex items-center gap-2 mb-3">
+            <label className="text-[13px] text-[#6B6450]">Portionen</label>
+            <input
+              type="number"
+              min={1}
+              value={portionen}
+              onChange={(e) => setPortionen(parseInt(e.target.value) || 1)}
+              className="w-16 bg-transparent border-b border-[#B9AF97] outline-none py-1 text-sm"
+            />
+          </div>
+
+          {lines.map((l, i) => {
+            const z = zutaten.find((zz) => zz.id === l.zutatId);
+            return (
+              <div key={i} className="flex items-center gap-2">
+                <DottedRow left={`${z?.name || "?"} · ${l.menge}g`} right={""} />
+                <IconBtn danger onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>
+                  <XIcon size={14} />
+                </IconBtn>
+              </div>
+            );
+          })}
+
+          <div className="flex gap-2 mt-2">
+            <select
+              value={pickZutat}
+              onChange={(e) => setPickZutat(e.target.value)}
+              className="flex-1 bg-transparent border-b border-[#B9AF97] outline-none py-1 text-sm"
+            >
+              <option value="">Zutat wählen…</option>
+              {zutaten.map((z) => (
+                <option key={z.id} value={z.id}>
+                  {z.name}
+                </option>
+              ))}
+            </select>
+            <input
+              placeholder="g"
+              type="number"
+              value={pickMenge}
+              onChange={(e) => setPickMenge(e.target.value)}
+              className="w-16 bg-transparent border-b border-[#B9AF97] outline-none py-1 text-sm"
+            />
+            <IconBtn onClick={addLine}>
+              <PlusIcon size={16} />
+            </IconBtn>
+          </div>
+        </Bon>
+
+        <Bon className="p-4">
+          <SectionLabel>Live-Berechnung</SectionLabel>
+          <DottedRow left="Gesamt" right={`${kcalFmt(totals.kcal)} kcal`} accent="#5C6B4F" bold />
+          <DottedRow left="Gesamt" right={euro(totals.kosten)} accent="#B08628" bold />
+          <div className="h-px bg-[#DCD4C0] my-2" />
+          <DottedRow left="Pro Portion" right={`${kcalFmt(totals.kcalPortion)} kcal`} accent="#5C6B4F" bold />
+          <DottedRow left="Pro Portion" right={euro(totals.kostenPortion)} accent="#B08628" bold />
+        </Bon>
+
+        <div className="flex gap-2">
+          <button
+            onClick={() => setEditing(null)}
+            className="flex-1 py-2 rounded-sm border border-[#B9AF97] text-sm text-[#6B6450]"
+          >
+            Abbrechen
+          </button>
+          <button
+            onClick={save}
+            className="flex-1 py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41]"
+          >
+            Rezept speichern
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3 pb-4">
+      {rezepte.map((r) => {
+        const t = berechne(r.zutaten, r.portionen);
+        return (
+          <Bon key={r.id} className="p-4">
+            <div className="flex items-center justify-between mb-1">
+              <span className="font-semibold text-[#2B2A28]">{r.name}</span>
+              <span className="text-[11px] text-[#948B72]">{r.portionen} Portion(en)</span>
+            </div>
+            <DottedRow left="Pro Portion" right={`${kcalFmt(t.kcalPortion)} kcal`} accent="#5C6B4F" />
+            <DottedRow left="Pro Portion" right={euro(t.kostenPortion)} accent="#B08628" />
+          </Bon>
+        );
+      })}
+      <button
+        onClick={startNew}
+        className="w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41]"
+      >
+        <PlusIcon size={15} /> Neues Rezept
+      </button>
+    </div>
+  );
+}
+
+// ---------- Log-Tab ----------
+function LogTab({ rezepte, zutaten, log, setLog }) {
+  const [rezeptId, setRezeptId] = useState("");
+  const [faktor, setFaktor] = useState(1);
+
+  const berechne = (rezept, faktorArg) => {
+    let kcal = 0, kosten = 0;
+    rezept.zutaten.forEach((l) => {
+      const z = zutaten.find((zz) => zz.id === l.zutatId);
+      if (!z) return;
+      kcal += (z.kcal100 / 100) * l.menge;
+      kosten += (preisPro100g(z) / 100) * l.menge;
+    });
+    const proPortion = { kcal: kcal / rezept.portionen, kosten: kosten / rezept.portionen };
+    return { kcal: proPortion.kcal * faktorArg, kosten: proPortion.kosten * faktorArg };
+  };
+
+  const heute = new Date().toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+
+  const addEntry = () => {
+    const rezept = rezepte.find((r) => r.id === rezeptId);
+    if (!rezept) return;
+    const t = berechne(rezept, faktor);
+    setLog((l) => [
+      { id: uid(), rezeptName: rezept.name, faktor, kcal: t.kcal, kosten: t.kosten, zeit: new Date() },
+      ...l,
+    ]);
+  };
+
+  return (
+    <div className="space-y-4 pb-4">
+      <Bon className="p-4">
+        <SectionLabel>Mahlzeit einbuchen — {heute}</SectionLabel>
+        <div className="flex gap-2 mb-2">
+          <select
+            value={rezeptId}
+            onChange={(e) => setRezeptId(e.target.value)}
+            className="flex-1 bg-transparent border-b border-[#B9AF97] outline-none py-1 text-sm"
+          >
+            <option value="">Rezept wählen…</option>
+            {rezepte.map((r) => (
+              <option key={r.id} value={r.id}>
+                {r.name}
+              </option>
+            ))}
+          </select>
+          <input
+            type="number"
+            step="0.25"
+            min="0.25"
+            value={faktor}
+            onChange={(e) => setFaktor(parseFloat(e.target.value) || 1)}
+            className="w-16 bg-transparent border-b border-[#B9AF97] outline-none py-1 text-sm"
+          />
+        </div>
+        <button
+          onClick={addEntry}
+          className="w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41]"
+        >
+          <PlusIcon size={15} /> Einbuchen ({faktor}× Portion)
+        </button>
+      </Bon>
+
+      <Bon className="p-4">
+        <SectionLabel>Heutiger Bon</SectionLabel>
+        {log.length === 0 && <p className="text-sm text-[#948B72] italic">Noch nichts gegessen heute.</p>}
+        {log.map((e) => (
+          <div key={e.id} className="flex items-center gap-2">
+            <DottedRow
+              left={`${e.rezeptName}${e.faktor !== 1 ? ` ×${e.faktor}` : ""}`}
+              right={euro(e.kosten)}
+              sub={`${kcalFmt(e.kcal)} kcal`}
+            />
+            <IconBtn danger onClick={() => setLog((l) => l.filter((x) => x.id !== e.id))}>
+              <TrashIcon size={13} />
+            </IconBtn>
+          </div>
+        ))}
+      </Bon>
+    </div>
+  );
+}
+
+// ---------- Dashboard-Tab ----------
+function DashboardTab({ log }) {
+  const totals = useMemo(() => {
+    const kcal = log.reduce((s, e) => s + e.kcal, 0);
+    const kosten = log.reduce((s, e) => s + e.kosten, 0);
+    return { kcal, kosten, kcalProEuro: kosten > 0 ? kcal / kosten : 0 };
+  }, [log]);
+
+  return (
+    <div className="space-y-4 pb-4">
+      <Bon className="p-5">
+        <SectionLabel>Tagesbilanz</SectionLabel>
+        <div className="grid grid-cols-2 gap-4 mt-2">
+          <div className="flex flex-col items-center py-3 rounded-sm bg-[#EFEADA]">
+            <FlameIcon size={20} color="#5C6B4F" className="mb-1" />
+            <span className="font-mono text-xl font-bold text-[#2B2A28]">{kcalFmt(totals.kcal)}</span>
+            <span className="text-[10.5px] uppercase tracking-wide text-[#8A8163]">kcal heute</span>
+          </div>
+          <div className="flex flex-col items-center py-3 rounded-sm bg-[#EFEADA]">
+            <CoinsIcon size={20} color="#B08628" className="mb-1" />
+            <span className="font-mono text-xl font-bold text-[#2B2A28]">{euro(totals.kosten)}</span>
+            <span className="text-[10.5px] uppercase tracking-wide text-[#8A8163]">Kosten heute</span>
+          </div>
+        </div>
+      </Bon>
+
+      <Bon className="p-4">
+        <SectionLabel>Kennzahl</SectionLabel>
+        <DottedRow
+          left="kcal pro ausgegebenem Euro"
+          right={totals.kosten > 0 ? kcalFmt(totals.kcalProEuro) : "–"}
+          accent="#5C6B4F"
+          bold
+        />
+        <p className="text-[11px] text-[#948B72] mt-2">
+          Höherer Wert = kalorienreicher pro Euro. Dient nur als grobe Orientierung, nicht als Nährwert-Ranking.
+        </p>
+      </Bon>
+
+      {log.length === 0 && (
+        <Bon className="p-4">
+          <p className="text-sm text-[#948B72] italic">Noch keine Einträge — buch im Log-Tab deine erste Mahlzeit ein.</p>
+        </Bon>
+      )}
+    </div>
+  );
+}
+
+// ---------- App ----------
+function App() {
+  const [zutaten, setZutaten] = useState(initialZutaten);
+  const [rezepte, setRezepte] = useState(initialRezepte);
+  const [log, setLog] = useState([]);
+  const [tab, setTab] = useState("zutaten");
+
+  const tabs = [
+    { id: "zutaten", label: "Zutaten", icon: ReceiptIcon },
+    { id: "rezepte", label: "Rezepte", icon: BookOpenIcon },
+    { id: "log", label: "Log", icon: CalendarIcon },
+    { id: "dashboard", label: "Bilanz", icon: DashboardIcon },
+  ];
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: "#EFEADA", fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <header className="px-5 pt-6 pb-4">
+        <h1 className="text-[19px] font-bold tracking-tight text-[#2B2A28]">Kalorien &amp; Kosten</h1>
+        <p className="text-[12px] text-[#8A8163]">jede Zutat, doppelt verbucht</p>
+      </header>
+
+      <main className="flex-1 px-4 max-w-md w-full mx-auto overflow-y-auto">
+        {tab === "zutaten" && <ZutatenTab zutaten={zutaten} setZutaten={setZutaten} />}
+        {tab === "rezepte" && <RezepteTab zutaten={zutaten} rezepte={rezepte} setRezepte={setRezepte} />}
+        {tab === "log" && <LogTab rezepte={rezepte} zutaten={zutaten} log={log} setLog={setLog} />}
+        {tab === "dashboard" && <DashboardTab log={log} />}
+      </main>
+
+      <nav className="sticky bottom-0 bg-[#FAF7EF] border-t border-[#DCD4C0] flex justify-around py-2 max-w-md w-full mx-auto">
+        {tabs.map((t) => {
+          const Icon = t.icon;
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className="flex flex-col items-center gap-0.5 px-3 py-1"
+            >
+              <Icon size={18} color={active ? "#5C6B4F" : "#A79E85"} />
+              <span className={`text-[10px] ${active ? "text-[#5C6B4F] font-semibold" : "text-[#A79E85]"}`}>
+                {t.label}
+              </span>
+            </button>
+          );
+        })}
+      </nav>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+</body>
+</html>
