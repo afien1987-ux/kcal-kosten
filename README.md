@@ -9,11 +9,12 @@ und Kosten pro Portion.
 - **Persistenz über Supabase**, mit Login (E-Mail + Passwort, offenes
   Sign-up). Jeder Account sieht nur seine eigenen Daten (Row Level Security).
   Setup siehe Abschnitt "Supabase einrichten" unten.
-- **Kein Kassenzettel-Scan.** Preise werden aktuell manuell eingegeben. Die
-  `/api/claude`-Route in `worker.js` ist bereits vorbereitet (gleiches Muster
-  wie bei der Vorratsküche-App), wird aber noch nicht vom Frontend
-  aufgerufen. Ein Anthropic API-Key ist deshalb **derzeit nicht nötig** –
-  Abschnitt 5 kann übersprungen werden, bis der Scan-Import gebaut ist.
+- **Kassenzettel-Scan ist aktiv** (Zutaten-Tab → "Kassenzettel fotografieren").
+  Foto geht über `/api/claude` in `worker.js` an Claude, Artikel+Preis werden
+  erkannt und gegen bestehende Zutaten abgeglichen; Ergebnis erst nach
+  Bestätigung in einer Review-Liste übernommen. Fotos werden nicht
+  gespeichert. Braucht den Anthropic API-Key aus Abschnitt 5 – ohne den
+  zeigt der Scan-Button einen Fehler.
 
 ## 1. Supabase einrichten
 1. Auf https://supabase.com registrieren/einloggen, neues Projekt anlegen
@@ -119,8 +120,7 @@ ersetzen (z. B. `https://ko-fi.com/deinname`).
 Die Worker-URL öffnen (z. B. `kcal-kosten.<dein-subdomain>.workers.dev`),
 Account registrieren, Bestätigungsmail anklicken, anmelden.
 
-## 5. Später: API-Key für Kassenzettel-Scan (noch nicht benötigt)
-Sobald der Scan-Import gebaut ist:
+## 5. API-Key für Kassenzettel-Scan
 1. Auf https://console.anthropic.com registrieren/einloggen (eigenes Konto,
    getrennt vom claude.ai-Abo, mit eigenem Guthaben/Abrechnung).
 2. Unter **API Keys** einen neuen Key erstellen.
