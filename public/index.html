@@ -45,10 +45,19 @@ const CoinsIcon = (p) => <Icon {...p}><circle cx="8" cy="8" r="6"/><path d="M18.
 const LogOutIcon = (p) => <Icon {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></Icon>;
 const EyeIcon = (p) => <Icon {...p}><path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/></Icon>;
 const EyeOffIcon = (p) => <Icon {...p}><path d="M10.733 5.076a10.744 10.744 0 0 1 11.205 6.575 1 1 0 0 1 0 .696 10.747 10.747 0 0 1-1.444 2.49"/><path d="M14.084 14.158a3 3 0 0 1-4.242-4.242"/><path d="M17.479 17.499a10.75 10.75 0 0 1-15.417-5.151 1 1 0 0 1 0-.696 10.75 10.75 0 0 1 4.446-5.143"/><path d="m2 2 20 20"/></Icon>;
+const MenuIcon = (p) => <Icon {...p}><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="20" y2="18"/></Icon>;
+const ArrowLeftIcon = (p) => <Icon {...p}><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></Icon>;
+const HelpCircleIcon = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></Icon>;
+const CoffeeIcon = (p) => <Icon {...p}><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></Icon>;
+const UserIcon = (p) => <Icon {...p}><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></Icon>;
+const ChevronRightIcon = (p) => <Icon {...p}><path d="m9 18 6-6-6-6"/></Icon>;
+const AlertTriangleIcon = (p) => <Icon {...p}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></Icon>;
+const ExternalLinkIcon = (p) => <Icon {...p}><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></Icon>;
 
 // Weitere Slots einfach ergänzen, z.B. "Zweites Frühstück", "Nachmittag" — keine DB-Änderung nötig.
 const MAHLZEIT_KATEGORIEN = ["Frühstück", "Mittagessen", "Abendessen", "Snack"];
 const UNDO_DELAY_MS = 5000;
+const KOFI_URL = "https://ko-fi.com/DEIN-KOFI-NAME"; // TODO: eigenen Ko-fi-Link eintragen
 
 // ---------- Hilfsfunktionen ----------
 const euro = (n) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
@@ -797,6 +806,250 @@ function DashboardTab({ log }) {
   );
 }
 
+// ---------- Menü ----------
+function MenuRow({ icon, label, onClick, href, external }) {
+  const content = (
+    <React.Fragment>
+      {icon}
+      <span className="flex-1">{label}</span>
+      {external ? <ExternalLinkIcon size={14} color="#A79E85" /> : <ChevronRightIcon size={16} color="#A79E85" />}
+    </React.Fragment>
+  );
+  const className = "w-full flex items-center gap-3 py-3 text-left text-sm text-[#2B2A28] border-b border-[#DCD4C0] last:border-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-[#5C6B4F]";
+  if (href) {
+    return (
+      <a href={href} target={external ? "_blank" : undefined} rel={external ? "noopener noreferrer" : undefined} className={className}>
+        {content}
+      </a>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} className={className}>
+      {content}
+    </button>
+  );
+}
+
+function MenuMain({ session, onNavigate }) {
+  return (
+    <div className="space-y-4">
+      <Bon className="p-4">
+        <SectionLabel>Angemeldet als</SectionLabel>
+        <p className="text-sm text-[#2B2A28] truncate">{session.user.email}</p>
+      </Bon>
+
+      <Bon className="px-4">
+        <MenuRow icon={<UserIcon size={18} color="#6B6450" />} label="Profileinstellungen" onClick={() => onNavigate("profil")} />
+        <MenuRow icon={<HelpCircleIcon size={18} color="#6B6450" />} label="Hilfe" onClick={() => onNavigate("hilfe")} />
+        <MenuRow icon={<CoffeeIcon size={18} color="#6B6450" />} label="Kaffee spendieren (Ko-fi)" href={KOFI_URL} external />
+        <MenuRow icon={<ReceiptIcon size={18} color="#6B6450" />} label="Impressum" href="/impressum" external />
+        <MenuRow icon={<ReceiptIcon size={18} color="#6B6450" />} label="Datenschutz" href="/datenschutz" external />
+      </Bon>
+
+      <button
+        type="button"
+        onClick={() => sb.auth.signOut()}
+        className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-sm border border-[#B9AF97] text-sm text-[#6B6450] hover:bg-[#F0ECDC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450]"
+      >
+        <LogOutIcon size={16} /> Abmelden
+      </button>
+    </div>
+  );
+}
+
+function ProfilSettings({ session }) {
+  const [newPassword, setNewPassword] = useState("");
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState("");
+  const [pwBusy, setPwBusy] = useState(false);
+  const [pwMsg, setPwMsg] = useState("");
+  const [pwErr, setPwErr] = useState("");
+
+  const changePassword = async (e) => {
+    e.preventDefault();
+    setPwErr("");
+    setPwMsg("");
+    if (newPassword !== newPasswordConfirm) {
+      setPwErr("Passwörter stimmen nicht überein.");
+      return;
+    }
+    setPwBusy(true);
+    try {
+      const { error } = await sb.auth.updateUser({ password: newPassword });
+      if (error) {
+        setPwErr(error.message);
+      } else {
+        setPwMsg("Passwort geändert.");
+        setNewPassword("");
+        setNewPasswordConfirm("");
+      }
+    } finally {
+      setPwBusy(false);
+    }
+  };
+
+  const [newEmail, setNewEmail] = useState("");
+  const [emailBusy, setEmailBusy] = useState(false);
+  const [emailMsg, setEmailMsg] = useState("");
+  const [emailErr, setEmailErr] = useState("");
+
+  const changeEmail = async (e) => {
+    e.preventDefault();
+    setEmailErr("");
+    setEmailMsg("");
+    setEmailBusy(true);
+    try {
+      const { error } = await sb.auth.updateUser({ email: newEmail });
+      if (error) {
+        setEmailErr(error.message);
+      } else {
+        setEmailMsg("Bestätigungslink an die neue Adresse geschickt — erst nach dem Klick ist die Änderung aktiv.");
+        setNewEmail("");
+      }
+    } finally {
+      setEmailBusy(false);
+    }
+  };
+
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteBusy, setDeleteBusy] = useState(false);
+  const [deleteErr, setDeleteErr] = useState("");
+
+  const deleteAccount = async () => {
+    if (deleteConfirm !== "LÖSCHEN") return;
+    setDeleteErr("");
+    setDeleteBusy(true);
+    try {
+      const { data } = await sb.auth.getSession();
+      const res = await fetch("/api/delete-account", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${data.session.access_token}` },
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        setDeleteErr(body.error || "Löschen fehlgeschlagen.");
+        setDeleteBusy(false);
+        return;
+      }
+      await sb.auth.signOut();
+    } catch (e) {
+      setDeleteErr("Löschen fehlgeschlagen: " + e.message);
+      setDeleteBusy(false);
+    }
+  };
+
+  const inputClass = "w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1.5 text-sm placeholder:text-[#A79E85]";
+
+  return (
+    <div className="space-y-4">
+      <Bon className="p-4">
+        <SectionLabel>Angemeldet als</SectionLabel>
+        <p className="text-sm text-[#2B2A28]">{session.user.email}</p>
+      </Bon>
+
+      <Bon className="p-4">
+        <SectionLabel>Passwort ändern</SectionLabel>
+        <form onSubmit={changePassword} className="space-y-2">
+          <input type="password" required minLength={6} placeholder="Neues Passwort (mind. 6 Zeichen)" aria-label="Neues Passwort" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className={inputClass} />
+          <input type="password" required minLength={6} placeholder="Neues Passwort bestätigen" aria-label="Neues Passwort bestätigen" autoComplete="new-password" value={newPasswordConfirm} onChange={(e) => setNewPasswordConfirm(e.target.value)} className={inputClass} />
+          {pwErr && <p className="text-[12px] text-[#A85A3F]">{pwErr}</p>}
+          {pwMsg && <p className="text-[12px] text-[#5C6B4F]">{pwMsg}</p>}
+          <button type="submit" disabled={pwBusy} className="w-full py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41] disabled:opacity-50">
+            Passwort speichern
+          </button>
+        </form>
+      </Bon>
+
+      <Bon className="p-4">
+        <SectionLabel>E-Mail ändern</SectionLabel>
+        <form onSubmit={changeEmail} className="space-y-2">
+          <input type="email" required placeholder="Neue E-Mail" aria-label="Neue E-Mail" autoComplete="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className={inputClass} />
+          {emailErr && <p className="text-[12px] text-[#A85A3F]">{emailErr}</p>}
+          {emailMsg && <p className="text-[12px] text-[#5C6B4F]">{emailMsg}</p>}
+          <button type="submit" disabled={emailBusy} className="w-full py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41] disabled:opacity-50">
+            E-Mail ändern
+          </button>
+        </form>
+      </Bon>
+
+      <Bon className="p-4" style={{ borderColor: "#D9B3A6" }}>
+        <div className="flex items-center gap-1.5 mb-2">
+          <AlertTriangleIcon size={13} color="#A85A3F" />
+          <span className="text-[10.5px] tracking-[0.18em] uppercase font-semibold text-[#A85A3F]">Konto löschen</span>
+        </div>
+        <p className="text-[12px] text-[#79705A] mb-2">
+          Löscht dein Konto und alle Zutaten, Rezepte und Log-Einträge unwiderruflich. Zum Bestätigen "LÖSCHEN" eintippen.
+        </p>
+        <input
+          placeholder="LÖSCHEN"
+          aria-label="Löschen bestätigen, tippe LÖSCHEN"
+          value={deleteConfirm}
+          onChange={(e) => setDeleteConfirm(e.target.value)}
+          className={inputClass}
+        />
+        {deleteErr && <p className="text-[12px] text-[#A85A3F] mt-2">{deleteErr}</p>}
+        <button
+          type="button"
+          onClick={deleteAccount}
+          disabled={deleteConfirm !== "LÖSCHEN" || deleteBusy}
+          className="mt-2 w-full py-2 rounded-sm bg-[#A85A3F] text-[#FAF7EF] text-sm font-medium hover:bg-[#8f4a33] disabled:opacity-40"
+        >
+          Konto endgültig löschen
+        </button>
+      </Bon>
+    </div>
+  );
+}
+
+function HilfeGuide() {
+  return (
+    <div className="space-y-4">
+      <Bon className="p-4">
+        <SectionLabel>So funktioniert's</SectionLabel>
+        <ol className="space-y-3 text-sm text-[#2B2A28] list-decimal list-inside">
+          <li><strong>Zutaten anlegen</strong> — Name, kcal pro 100g und was du beim Einkauf bezahlt hast (Menge + Preis). Preis pro 100g wird automatisch berechnet.</li>
+          <li><strong>Rezepte bauen</strong> — Zutaten mit Gramm-Mengen zusammenstellen, kcal und Kosten pro Portion siehst du live.</li>
+          <li><strong>Mahlzeiten einbuchen</strong> — im Log-Tab ein Rezept, eine Kategorie und einen Portionsfaktor wählen.</li>
+          <li><strong>Bilanz ansehen</strong> — Tagesüberblick über kcal und Kosten.</li>
+        </ol>
+      </Bon>
+      <Bon className="p-4">
+        <SectionLabel>Noch Fragen?</SectionLabel>
+        <p className="text-sm text-[#2B2A28]">
+          Schreib mir: <a href="mailto:afien1987@gmail.com" className="underline text-[#5C6B4F]">afien1987@gmail.com</a>
+        </p>
+      </Bon>
+    </div>
+  );
+}
+
+function MenuOverlay({ session, onClose }) {
+  const [view, setView] = useState("main");
+  const titles = { main: "Menü", profil: "Profileinstellungen", hilfe: "Hilfe" };
+
+  return (
+    <div className="fixed inset-0 z-30 overflow-y-auto" style={{ background: "#EFEADA" }}>
+      <div className="max-w-md mx-auto px-4 pt-6 pb-10 min-h-screen">
+        <div className="flex items-center gap-2 mb-4">
+          {view !== "main" ? (
+            <IconBtn label="Zurück" onClick={() => setView("main")}>
+              <ArrowLeftIcon size={18} />
+            </IconBtn>
+          ) : (
+            <div className="w-10" />
+          )}
+          <h2 className="flex-1 text-[17px] font-bold text-[#2B2A28]">{titles[view]}</h2>
+          <IconBtn label="Menü schließen" onClick={onClose}>
+            <XIcon size={18} />
+          </IconBtn>
+        </div>
+        {view === "main" && <MenuMain session={session} onNavigate={setView} />}
+        {view === "profil" && <ProfilSettings session={session} />}
+        {view === "hilfe" && <HilfeGuide />}
+      </div>
+    </div>
+  );
+}
+
 // ---------- Eingeloggte App ----------
 function MainApp({ session }) {
   const [zutaten, setZutaten] = useState([]);
@@ -805,6 +1058,7 @@ function MainApp({ session }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [tab, setTab] = useState("zutaten");
+  const [menuOpen, setMenuOpen] = useState(false);
   const [hiddenIds, setHiddenIds] = useState(() => new Set());
   const [toast, setToast] = useState(null); // { message, onUndo }
   const pendingTimers = React.useRef({});
@@ -958,22 +1212,13 @@ function MainApp({ session }) {
         <div>
           <h1 className="text-[19px] font-bold tracking-tight text-[#2B2A28]">Kalorien &amp; Kosten</h1>
           <p className="text-[12px] text-[#6E6650]">jede Zutat, doppelt verbucht</p>
-          <p className="text-[10px] text-[#A79E85] mt-1">
-            <a href="/impressum" className="underline">Impressum</a>
-            <span className="mx-1">·</span>
-            <a href="/datenschutz" className="underline">Datenschutz</a>
-          </p>
         </div>
-        <button
-          type="button"
-          onClick={() => sb.auth.signOut()}
-          className="flex items-center gap-1 text-[11px] text-[#6E6650] hover:text-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450] pt-1"
-          title={session.user.email}
-          aria-label={`Abmelden (angemeldet als ${session.user.email})`}
-        >
-          <LogOutIcon size={14} /> Abmelden
-        </button>
+        <IconBtn label="Menü öffnen" onClick={() => setMenuOpen(true)}>
+          <MenuIcon size={20} color="#6B6450" />
+        </IconBtn>
       </header>
+
+      {menuOpen && <MenuOverlay session={session} onClose={() => setMenuOpen(false)} />}
 
       {loadError && (
         <div className="px-4 mb-2 max-w-md w-full mx-auto">

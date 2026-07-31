@@ -77,6 +77,30 @@ Variante ohne eigene Domain: Gmail als SMTP-Server.
 4. Speichern. Danach hat der Versand Gmails reguläres Limit (500 E-Mails/Tag)
    statt Supabase's Test-Limit – für eine private App mehr als genug.
 
+## 1c. Konto-Löschung aktivieren (Menü → Profileinstellungen → Konto löschen)
+Nutzer können sich nicht selbst über den normalen Supabase-Client löschen –
+das braucht den Service-Role-Key, der **niemals** im Frontend landen darf.
+Der Worker stellt dafür die Route `/api/delete-account` bereit, die den
+Service-Role-Key nur serverseitig nutzt.
+
+1. Supabase Dashboard → **Project Settings → API** → Abschnitt "Project API
+   keys" → `service_role`-Key kopieren (⚠️ nicht mit dem `anon`-Key
+   verwechseln – dieser Key umgeht Row Level Security komplett).
+2. Cloudflare Worker-Projekt → **Settings → Variables and Secrets** → neues
+   Secret:
+   - Name: `SUPABASE_SERVICE_ROLE_KEY`
+   - Wert: der Key aus Schritt 1
+   - Typ: **Secret**
+3. Speichern, ggf. einmal manuell redeployen (Deployments → Retry/Redeploy).
+
+Ohne diesen Schritt zeigt "Konto endgültig löschen" einen Fehler an, der
+Rest der App funktioniert trotzdem normal.
+
+## 1d. Ko-fi-Link eintragen
+Im Menü gibt es "Kaffee spendieren (Ko-fi)". In `public/index.html` ganz
+oben im Script die Konstante `KOFI_URL` durch den eigenen Ko-fi-Link
+ersetzen (z. B. `https://ko-fi.com/deinname`).
+
 ## 2. Repo auf GitHub anlegen
 1. Neues Repo erstellen, z. B. `kalorien-kosten-tracker`.
 2. Diese Dateien/Ordner hochladen (flach, ohne `.git`):
