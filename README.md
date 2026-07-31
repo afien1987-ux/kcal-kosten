@@ -17,7 +17,7 @@ und Kosten pro Portion.
 
 ## 1. Supabase einrichten
 1. Auf https://supabase.com registrieren/einloggen, neues Projekt anlegen
-   (Name z. B. `kalorien-kosten-tracker`, Region z. B. Frankfurt).
+   (Name z. B. `kcal-kosten`, Region z. B. Frankfurt).
 2. Im Projekt: **SQL Editor** → neue Query → Inhalt von `supabase/schema.sql`
    aus diesem Repo einfügen → **Run**. Das legt die vier Tabellen
    (`zutaten`, `rezepte`, `rezept_zutaten`, `log_eintraege`) inkl.
@@ -32,7 +32,7 @@ und Kosten pro Portion.
    anklicken, bevor sie sich einloggen können. Das ist bei offenem Sign-up
    sinnvoll und muss nicht geändert werden.
 6. **Authentication → URL Configuration → Site URL**: auf die Worker-URL
-   setzen (z. B. `https://kalorien-kosten-tracker.<dein-subdomain>.workers.dev`),
+   setzen (z. B. `https://kcal-kosten.<dein-subdomain>.workers.dev`),
    sonst landen Bestätigungs-/Login-Links auf `localhost:3000`.
 
 ## 1a. Google-Login aktivieren (optional)
@@ -46,7 +46,7 @@ wenn der Google-Provider in Supabase eingerichtet ist:
 3. **APIs & Services → Credentials → Create Credentials → OAuth client ID**,
    Typ "Web application":
    - **Authorized JavaScript origins**: die Worker-URL (z. B.
-     `https://kalorien-kosten-tracker.<dein-subdomain>.workers.dev`)
+     `https://kcal-kosten.<dein-subdomain>.workers.dev`)
    - **Authorized redirect URIs**: `https://<dein-projekt>.supabase.co/auth/v1/callback`
      (Projekt-Ref aus Schritt 1, Abschnitt "Supabase einrichten")
 4. Client-ID und Client-Secret kopieren.
@@ -64,7 +64,7 @@ Variante ohne eigene Domain: Gmail als SMTP-Server.
    aktivieren (falls noch nicht aktiv) unter
    [myaccount.google.com/security](https://myaccount.google.com/security).
 2. Dort ein **App-Passwort** erzeugen: [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords)
-   → App "Mail", Gerät z. B. "Supabase kclal" → Generieren → das 16-stellige
+   → App "Mail", Gerät z. B. "Supabase kcal-kosten" → Generieren → das 16-stellige
    Passwort kopieren (nicht das normale Gmail-Passwort).
 3. Supabase Dashboard → **Authentication → Emails → SMTP Settings** (oder
    Authentication → Settings, Abschnitt "SMTP Settings") → **Enable Custom SMTP**:
@@ -102,7 +102,7 @@ oben im Script die Konstante `KOFI_URL` durch den eigenen Ko-fi-Link
 ersetzen (z. B. `https://ko-fi.com/deinname`).
 
 ## 2. Repo auf GitHub anlegen
-1. Neues Repo erstellen, z. B. `kalorien-kosten-tracker`.
+1. Neues Repo erstellen, z. B. `kcal-kosten`.
 2. Diese Dateien/Ordner hochladen (flach, ohne `.git`):
    - `worker.js`
    - `wrangler.jsonc`
@@ -116,7 +116,7 @@ ersetzen (z. B. `https://ko-fi.com/deinname`).
 4. Deploy anstoßen.
 
 ## 4. Testen
-Die Worker-URL öffnen (z. B. `kalorien-kosten-tracker.<dein-subdomain>.workers.dev`),
+Die Worker-URL öffnen (z. B. `kcal-kosten.<dein-subdomain>.workers.dev`),
 Account registrieren, Bestätigungsmail anklicken, anmelden.
 
 ## 5. Später: API-Key für Kassenzettel-Scan (noch nicht benötigt)

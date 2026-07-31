@@ -1,4 +1,4 @@
-const CACHE_NAME = "kclal-shell-v1";
+const CACHE_NAME = "kcal-kosten-shell-v1";
 const SHELL_URLS = ["/", "/manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {
