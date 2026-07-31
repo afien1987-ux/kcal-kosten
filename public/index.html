@@ -202,7 +202,7 @@ async function lookupOpenFoodFacts(barcode) {
   const timer = setTimeout(() => controller.abort(), 15000);
   let res;
   try {
-    res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,nutriments`, {
+    res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,product_name_de,product_name_en,brands,nutriments`, {
       signal: controller.signal,
     });
   } catch (e) {
@@ -212,8 +212,10 @@ async function lookupOpenFoodFacts(barcode) {
   }
   const data = await res.json();
   if (data.status !== 1 || !data.product) return null;
-  const kcal = data.product.nutriments && data.product.nutriments["energy-kcal_100g"];
-  return { name: data.product.product_name || "", kcal100: typeof kcal === "number" ? kcal : null };
+  const p = data.product;
+  const name = p.product_name || p.product_name_de || p.product_name_en || p.brands || "";
+  const kcal = p.nutriments && p.nutriments["energy-kcal_100g"];
+  return { name, kcal100: typeof kcal === "number" ? kcal : null };
 }
 
 // ---------- Kleine UI-Bausteine im Kassenbon-Stil ----------
