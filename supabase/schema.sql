@@ -5,7 +5,10 @@ create table if not exists zutaten (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null default auth.uid() references auth.users (id) on delete cascade,
   name text not null,
+  -- kcal100 ist "kcal pro Referenzmenge": bei einheit='g'/'ml' pro 100 Einheiten,
+  -- bei einheit='Stück' pro 1 Stück (Name bleibt aus Kompatibilitätsgründen).
   kcal100 numeric not null,
+  einheit text not null default 'g',
   einkaufsmenge numeric not null,
   einkaufspreis numeric not null,
   created_at timestamptz not null default now()

@@ -79,7 +79,13 @@ const KOFI_URL = "https://ko-fi.com/adrianfien";
 // ---------- Hilfsfunktionen ----------
 const euro = (n) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
 const kcalFmt = (n) => Math.round(n).toLocaleString("de-DE");
-const preisPro100g = (z) => (z.einkaufsmenge > 0 ? (z.einkaufspreis / z.einkaufsmenge) * 100 : 0);
+const EINHEITEN = ["g", "ml", "Stück"];
+// Bei Stück wird pro 1 Stück gerechnet, bei g/ml pro 100 Einheiten.
+const referenzMenge = (einheit) => (einheit === "Stück" ? 1 : 100);
+const referenzLabel = (einheit) => (einheit === "Stück" ? "Stück" : `100${einheit}`);
+const mengenEinheit = (z) => (z.einheit === "Stück" ? "Stück" : z.einheit || "g");
+const preisProReferenz = (z) => (z.einkaufsmenge > 0 ? (z.einkaufspreis / z.einkaufsmenge) * referenzMenge(z.einheit) : 0);
+const formatMenge = (menge, einheit) => (einheit === "Stück" ? `${menge} Stück` : `${menge}${einheit || "g"}`);
 const startOfTodayISO = () => {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -470,7 +476,7 @@ function AuthScreen() {
 
 // ---------- Zutaten-Tab ----------
 function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
-  const [form, setForm] = useState({ name: "", kcal100: "", einkaufsmenge: "", einkaufspreis: "" });
+  const [form, setForm] = useState({ name: "", kcal100: "", einheit: "g", einkaufsmenge: "", einkaufspreis: "" });
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState("");
   const [scanBusy, setScanBusy] = useState(false);
@@ -588,8 +594,8 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
     setHint("");
     setBusy(true);
     try {
-      await onAdd({ name: form.name, kcal100, einkaufsmenge, einkaufspreis });
-      setForm({ name: "", kcal100: "", einkaufsmenge: "", einkaufspreis: "" });
+      await onAdd({ name: form.name, kcal100, einheit: form.einheit, einkaufsmenge, einkaufspreis });
+      setForm({ name: "", kcal100: "", einheit: form.einheit, einkaufsmenge: "", einkaufspreis: "" });
     } finally {
       setBusy(false);
     }
@@ -603,8 +609,8 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
           <div key={z.id} className="flex items-center gap-2">
             <DottedRow
               left={z.name}
-              right={`${euro(preisPro100g(z))}/100g`}
-              sub={`${z.kcal100} kcal/100g`}
+              right={`${euro(preisProReferenz(z))}/${referenzLabel(z.einheit)}`}
+              sub={`${z.kcal100} kcal/${referenzLabel(z.einheit)}`}
             />
             <IconBtn danger label={`${z.name} löschen`} onClick={() => onDelete(z)}>
               <TrashIcon size={13} />
@@ -633,8 +639,8 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
               className="col-span-2 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
             />
             <input
-              placeholder="kcal / 100g"
-              aria-label="Kilokalorien pro 100 Gramm"
+              placeholder={`kcal / ${referenzLabel(form.einheit)}`}
+              aria-label={`Kilokalorien pro ${referenzLabel(form.einheit)}`}
               type="number"
               inputMode="decimal"
               required
@@ -644,9 +650,21 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
               onChange={(e) => setForm({ ...form, kcal100: e.target.value })}
               className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
             />
+            <select
+              value={form.einheit}
+              aria-label="Einheit"
+              onChange={(e) => setForm({ ...form, einheit: e.target.value })}
+              className="bg-transparent border-b border-[#B9AF97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm"
+            >
+              {EINHEITEN.map((e) => (
+                <option key={e} value={e}>
+                  {e}
+                </option>
+              ))}
+            </select>
             <input
-              placeholder="Einkaufsmenge (g)"
-              aria-label="Einkaufsmenge in Gramm"
+              placeholder={`Einkaufsmenge (${form.einheit})`}
+              aria-label={`Einkaufsmenge in ${form.einheit}`}
               type="number"
               inputMode="decimal"
               required
@@ -666,7 +684,7 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
               min="0.01"
               value={form.einkaufspreis}
               onChange={(e) => setForm({ ...form, einkaufspreis: e.target.value })}
-              className="col-span-2 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
+              className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
             />
           </div>
           {hint && <p className="mt-2 text-[12px] text-[#A85A3F]">{hint}</p>}
@@ -756,6 +774,7 @@ function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
   const [pickMenge, setPickMenge] = useState("");
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState("");
+  const pickZutatObj = zutaten.find((z) => z.id === pickZutat) || null;
 
   const startNew = () => {
     setEditing("new");
@@ -770,8 +789,9 @@ function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
     linesArg.forEach((l) => {
       const z = zutaten.find((zz) => zz.id === l.zutatId);
       if (!z) return;
-      kcal += (z.kcal100 / 100) * l.menge;
-      kosten += (preisPro100g(z) / 100) * l.menge;
+      const ref = referenzMenge(z.einheit);
+      kcal += (z.kcal100 / ref) * l.menge;
+      kosten += (preisProReferenz(z) / ref) * l.menge;
     });
     return { kcal, kosten, kcalPortion: kcal / portionenArg, kostenPortion: kosten / portionenArg };
   };
@@ -834,7 +854,7 @@ function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
             const z = zutaten.find((zz) => zz.id === l.zutatId);
             return (
               <div key={i} className="flex items-center gap-2">
-                <DottedRow left={`${z?.name || "?"} · ${l.menge}g`} right={""} />
+                <DottedRow left={`${z?.name || "?"} · ${formatMenge(l.menge, z && z.einheit)}`} right={""} />
                 <IconBtn danger label={`${z?.name || "Position"} entfernen`} onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>
                   <XIcon size={14} />
                 </IconBtn>
@@ -857,8 +877,8 @@ function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
               ))}
             </select>
             <input
-              placeholder="g"
-              aria-label="Menge in Gramm"
+              placeholder={pickZutatObj ? mengenEinheit(pickZutatObj) : "Menge"}
+              aria-label={pickZutatObj ? `Menge in ${mengenEinheit(pickZutatObj)}` : "Menge"}
               type="number"
               inputMode="decimal"
               min="0.01"
@@ -949,8 +969,9 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
     rezept.zutaten.forEach((l) => {
       const z = zutaten.find((zz) => zz.id === l.zutatId);
       if (!z) return;
-      kcal += (z.kcal100 / 100) * l.menge;
-      kosten += (preisPro100g(z) / 100) * l.menge;
+      const ref = referenzMenge(z.einheit);
+      kcal += (z.kcal100 / ref) * l.menge;
+      kosten += (preisProReferenz(z) / ref) * l.menge;
     });
     const proPortion = { kcal: kcal / rezept.portionen, kosten: kosten / rezept.portionen };
     return { kcal: proPortion.kcal * faktorArg, kosten: proPortion.kosten * faktorArg };
@@ -1311,8 +1332,8 @@ function HilfeGuide() {
       <Bon className="p-4">
         <SectionLabel>So funktioniert's</SectionLabel>
         <ol className="space-y-3 text-sm text-[#2B2A28] list-decimal list-inside">
-          <li><strong>Zutaten anlegen</strong> — Name, kcal pro 100g und was du beim Einkauf bezahlt hast (Menge + Preis). Preis pro 100g wird automatisch berechnet.</li>
-          <li><strong>Rezepte bauen</strong> — Zutaten mit Gramm-Mengen zusammenstellen, kcal und Kosten pro Portion siehst du live.</li>
+          <li><strong>Zutaten anlegen</strong> — Name, Einheit (g, ml oder Stück), kcal je Einheit und was du beim Einkauf bezahlt hast (Menge + Preis). Preis pro Einheit wird automatisch berechnet.</li>
+          <li><strong>Rezepte bauen</strong> — Zutaten mit ihrer jeweiligen Menge zusammenstellen, kcal und Kosten pro Portion siehst du live.</li>
           <li><strong>Mahlzeiten einbuchen</strong> — im Log-Tab ein Rezept, eine Kategorie und einen Portionsfaktor wählen.</li>
           <li><strong>Bilanz ansehen</strong> — Tagesüberblick über kcal und Kosten.</li>
         </ol>

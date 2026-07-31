@@ -29,6 +29,14 @@ und Kosten pro Portion.
    aus diesem Repo einfügen → **Run**. Das legt die vier Tabellen
    (`zutaten`, `rezepte`, `rezept_zutaten`, `log_eintraege`) inkl.
    Row-Level-Security an, sodass jeder Account nur seine eigenen Daten sieht.
+2a. **Bestehendes Projekt aktualisieren**: Wurde `schema.sql` schon früher
+   ausgeführt, reicht das nicht mehr für neue Spalten. Im SQL Editor einmal
+   ausführen (Reihenfolge egal, `if not exists` macht das ungefährlich):
+   - `supabase/migrations/0001_log_kategorie.sql` — Mahlzeit-Kategorien
+     (Frühstück/Mittag/Abend/Snack) für `log_eintraege`.
+   - `supabase/migrations/0002_zutaten_einheit.sql` — Mengeneinheit (g/ml/Stück)
+     für `zutaten`. Ohne diese Migration funktioniert der Zutaten-Tab bei
+     bestehenden Projekten nicht mehr, da die neue Spalte `einheit` fehlt.
 3. **Project Settings → API**: `Project URL` und `anon public`-Key kopieren.
 4. In `public/index.html` ganz oben im Script die beiden Konstanten
    `SUPABASE_URL` und `SUPABASE_ANON_KEY` mit diesen Werten ersetzen. Der
