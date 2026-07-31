@@ -287,18 +287,18 @@ function Bon({ children, className = "" }) {
 
 function DottedRow({ left, right, sub, bold, accent }) {
   return (
-    <div className="flex items-baseline gap-2 py-0.5">
-      <span className={`whitespace-nowrap text-[13.5px] ${bold ? "font-semibold" : ""}`} style={{ color: "#2B2A28" }}>
+    <div className="flex items-baseline gap-2 py-0.5 min-w-0">
+      <span className={`truncate min-w-0 text-[13.5px] ${bold ? "font-semibold" : ""}`} style={{ color: "#2B2A28" }}>
         {left}
       </span>
-      <span className="flex-1 border-b border-dotted translate-y-[-3px]" style={{ borderColor: "#B9AF97" }} />
+      <span className="flex-1 min-w-[8px] border-b border-dotted translate-y-[-3px]" style={{ borderColor: "#B9AF97" }} />
       <span
-        className={`whitespace-nowrap font-mono text-[13.5px] ${bold ? "font-bold" : ""}`}
+        className={`shrink-0 whitespace-nowrap font-mono text-[13.5px] ${bold ? "font-bold" : ""}`}
         style={{ color: accent || "#2B2A28" }}
       >
         {right}
       </span>
-      {sub && <span className="text-[11px] text-[#79705A] ml-1">{sub}</span>}
+      {sub && <span className="shrink-0 whitespace-nowrap text-[11px] text-[#79705A] ml-1">{sub}</span>}
     </div>
   );
 }
