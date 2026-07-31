@@ -6,6 +6,14 @@ und Kosten pro Portion.
 
 ## Stand dieses Prototyps
 - Zutaten, Rezepte, Log und Bilanz-Dashboard sind funktionsfähig.
+- **Rezepte lassen sich bearbeiten** (Stift-Icon in der Rezepte-Liste), nicht
+  nur anlegen und löschen.
+- **Log-Tab hat eine Tagesnavigation** (Pfeile oben im Tab) — frühere Tage
+  lassen sich einzeln nachträglich einsehen; neue Mahlzeiten lassen sich nur
+  für den heutigen Tag einbuchen.
+- **Dashboard zeigt einen 14-Tage-Verlauf** für kcal und Kosten (eigener
+  Abschnitt unterhalb der Tagesbilanz), unabhängig davon, welcher Tag gerade
+  im Log-Tab angezeigt wird.
 - **Persistenz über Supabase**, mit Login (E-Mail + Passwort, offenes
   Sign-up). Jeder Account sieht nur seine eigenen Daten (Row Level Security).
   Setup siehe Abschnitt "Supabase einrichten" unten.

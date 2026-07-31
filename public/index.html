@@ -32,7 +32,7 @@
 <body>
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
-const { useState, useEffect, useMemo } = React;
+const { useState, useEffect } = React;
 
 // ---------- Supabase ----------
 const SUPABASE_URL = "https://gmhhadgakqlohcbjbdhi.supabase.co";
@@ -72,6 +72,8 @@ const LoaderIcon = (p) => <Icon {...p} className={`animate-spin ${p.className ||
 const BarcodeIcon = (p) => <Icon {...p}><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></Icon>;
 const SearchIcon = (p) => <Icon {...p}><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></Icon>;
 const SlidersIcon = (p) => <Icon {...p}><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="2" y1="14" x2="6" y2="14"/><line x1="10" y1="8" x2="14" y2="8"/><line x1="18" y1="16" x2="22" y2="16"/></Icon>;
+const PencilIcon = (p) => <Icon {...p}><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></Icon>;
+const ChevronLeftIcon = (p) => <Icon {...p}><path d="m15 18-6-6 6-6"/></Icon>;
 
 // Weitere Slots einfach ergänzen, z.B. "Zweites Frühstück", "Nachmittag" — keine DB-Änderung nötig.
 const MAHLZEIT_KATEGORIEN = ["Frühstück", "Mittagessen", "Abendessen", "Snack"];
@@ -88,11 +90,23 @@ const referenzLabel = (einheit) => (einheit === "Stück" ? "Stück" : `100${einh
 const mengenEinheit = (z) => (z.einheit === "Stück" ? "Stück" : z.einheit || "g");
 const preisProReferenz = (z) => (z.einkaufsmenge > 0 ? (z.einkaufspreis / z.einkaufsmenge) * referenzMenge(z.einheit) : 0);
 const formatMenge = (menge, einheit) => (einheit === "Stück" ? `${menge} Stück` : `${menge}${einheit || "g"}`);
-const startOfTodayISO = () => {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString();
+const startOfDayISO = (d = new Date()) => {
+  const x = new Date(d);
+  x.setHours(0, 0, 0, 0);
+  return x.toISOString();
 };
+const addDays = (d, n) => {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+};
+const localDateKey = (d) => {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
+const isSameLocalDay = (isoA, isoB) => new Date(isoA).toDateString() === new Date(isoB).toDateString();
 
 // Für Sub-Ansichten innerhalb eines Tabs (z.B. Verwalten-Modus, Rezept-Formular), die sich
 // wie das Menü über die History API öffnen/schließen sollen, damit der Zurück-Button sie
@@ -296,13 +310,14 @@ function SectionLabel({ children }) {
   );
 }
 
-function IconBtn({ onClick, children, danger, label }) {
+function IconBtn({ onClick, children, danger, label, disabled }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-label={label}
-      className={`min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#6B6450] ${
+      className={`min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#6B6450] disabled:opacity-30 disabled:pointer-events-none ${
         danger ? "hover:bg-[#F0DCD4] text-[#A85A3F]" : "hover:bg-[#E9E3D2] text-[#6B6450]"
       }`}
     >
@@ -837,7 +852,7 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
 }
 
 // ---------- Rezepte-Tab ----------
-function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
+function RezepteTab({ zutaten, rezepte, onSave, onUpdate, onDelete }) {
   const [editing, setEditing] = useState(null); // rezept object being built
   const [editingOpen, activateEditing, deactivateEditing] = useHistoryFlag("rezeptEdit");
   const [name, setName] = useState("");
@@ -858,6 +873,15 @@ function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
     setName("");
     setPortionen(1);
     setLines([]);
+    setHint("");
+    activateEditing();
+  };
+
+  const startEdit = (r) => {
+    setEditing(r);
+    setName(r.name);
+    setPortionen(r.portionen);
+    setLines(r.zutaten.map((l) => ({ ...l })));
     setHint("");
     activateEditing();
   };
@@ -895,7 +919,11 @@ function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
     setHint("");
     setBusy(true);
     try {
-      await onSave({ name, portionen, zutaten: lines });
+      if (editing && editing !== "new") {
+        await onUpdate(editing.id, { name, portionen, zutaten: lines });
+      } else {
+        await onSave({ name, portionen, zutaten: lines });
+      }
       deactivateEditing();
     } finally {
       setBusy(false);
@@ -904,10 +932,11 @@ function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
 
   if (editing) {
     const totals = berechne(lines, portionen || 1);
+    const isEdit = editing !== "new";
     return (
       <form onSubmit={save} className="space-y-4 pb-4">
         <Bon className="p-4">
-          <SectionLabel>Rezept zusammenstellen</SectionLabel>
+          <SectionLabel>{isEdit ? "Rezept bearbeiten" : "Rezept zusammenstellen"}</SectionLabel>
           <input
             placeholder="Name des Rezepts"
             aria-label="Name des Rezepts"
@@ -996,7 +1025,7 @@ function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
             disabled={busy}
             className="flex-1 py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-50"
           >
-            Rezept speichern
+            {isEdit ? "Änderungen speichern" : "Rezept speichern"}
           </button>
         </div>
       </form>
@@ -1013,6 +1042,9 @@ function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
               <span className="font-semibold text-[#2B2A28]">{r.name}</span>
               <div className="flex items-center gap-1">
                 <span className="text-[11px] text-[#79705A]">{r.portionen} Portion(en)</span>
+                <IconBtn label={`${r.name} bearbeiten`} onClick={() => startEdit(r)}>
+                  <PencilIcon size={13} />
+                </IconBtn>
                 <IconBtn danger label={`${r.name} löschen`} onClick={() => onDelete(r)}>
                   <TrashIcon size={13} />
                 </IconBtn>
@@ -1035,7 +1067,7 @@ function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
 }
 
 // ---------- Log-Tab ----------
-function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
+function LogTab({ rezepte, zutaten, log, logDate, logLoading, logIsToday, onPrevDay, onNextDay, onToday, onAdd, onDelete }) {
   const [rezeptId, setRezeptId] = useState("");
   const [faktor, setFaktor] = useState(1);
   const [kategorie, setKategorie] = useState(MAHLZEIT_KATEGORIEN[0]);
@@ -1055,7 +1087,7 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
     return { kcal: proPortion.kcal * faktorArg, kosten: proPortion.kosten * faktorArg };
   };
 
-  const heute = new Date().toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
+  const tagesLabel = new Date(logDate).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
 
   const addEntry = async (e) => {
     e.preventDefault();
@@ -1086,8 +1118,29 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
 
   return (
     <div className="space-y-4 pb-4">
+      <Bon className="p-3">
+        <div className="flex items-center justify-between gap-2">
+          <IconBtn label="Vorheriger Tag" onClick={onPrevDay}>
+            <ChevronLeftIcon size={16} />
+          </IconBtn>
+          <button
+            type="button"
+            onClick={onToday}
+            disabled={logIsToday}
+            className="flex-1 text-center text-sm font-medium text-[#2B2A28] py-1 disabled:opacity-100"
+          >
+            {logIsToday ? `Heute — ${tagesLabel}` : tagesLabel}
+            {!logIsToday && <span className="block text-[10px] text-[#5C6B4F] underline">Zu heute springen</span>}
+          </button>
+          <IconBtn label="Nächster Tag" onClick={onNextDay} disabled={logIsToday}>
+            <ChevronRightIcon size={16} />
+          </IconBtn>
+        </div>
+      </Bon>
+
+      {logIsToday && (
       <Bon className="p-4">
-        <SectionLabel>Mahlzeit einbuchen — {heute}</SectionLabel>
+        <SectionLabel>Mahlzeit einbuchen</SectionLabel>
         <form onSubmit={addEntry}>
         <select
           value={kategorie}
@@ -1136,11 +1189,17 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
         </button>
         </form>
       </Bon>
+      )}
 
       <Bon className="p-4">
-        <SectionLabel>Heutiger Bon</SectionLabel>
-        {log.length === 0 && <p className="text-sm text-[#79705A] italic">Noch nichts gegessen heute.</p>}
-        {gruppen.map((g) => (
+        <SectionLabel>{logIsToday ? "Heutiger Bon" : `Bon — ${tagesLabel}`}</SectionLabel>
+        {logLoading && <p className="text-sm text-[#79705A] italic">Lädt…</p>}
+        {!logLoading && log.length === 0 && (
+          <p className="text-sm text-[#79705A] italic">
+            {logIsToday ? "Noch nichts gegessen heute." : "Keine Einträge an diesem Tag."}
+          </p>
+        )}
+        {!logLoading && gruppen.map((g) => (
           <div key={g.kat} className="mb-3 last:mb-0">
             <div className="text-[10px] uppercase tracking-wide text-[#8C6A1F] font-semibold mb-1">{g.kat}</div>
             {g.eintraege.map((e) => (
@@ -1163,12 +1222,63 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
 }
 
 // ---------- Dashboard-Tab ----------
-function DashboardTab({ log }) {
-  const totals = useMemo(() => {
-    const kcal = log.reduce((s, e) => s + e.kcal, 0);
-    const kosten = log.reduce((s, e) => s + e.kosten, 0);
-    return { kcal, kosten, kcalProEuro: kosten > 0 ? kcal / kosten : 0 };
-  }, [log]);
+const TREND_TAGE = 14;
+
+function DashboardTab() {
+  const [trend, setTrend] = useState(null); // null = lädt noch
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const von = startOfDayISO(addDays(new Date(), -(TREND_TAGE - 1)));
+      const { data, error } = await sb
+        .from("log_eintraege")
+        .select("zeit, kcal, kosten")
+        .gte("zeit", von)
+        .order("zeit", { ascending: true });
+      if (cancelled) return;
+      if (error) {
+        setError(error.message);
+        setTrend([]);
+        return;
+      }
+      const buckets = new Map();
+      data.forEach((e) => {
+        const key = localDateKey(new Date(e.zeit));
+        const b = buckets.get(key) || { kcal: 0, kosten: 0 };
+        b.kcal += e.kcal;
+        b.kosten += e.kosten;
+        buckets.set(key, b);
+      });
+      const reihe = [];
+      for (let i = TREND_TAGE - 1; i >= 0; i--) {
+        const d = addDays(new Date(), -i);
+        const key = localDateKey(d);
+        const b = buckets.get(key) || { kcal: 0, kosten: 0 };
+        reihe.push({
+          key,
+          label: d.toLocaleDateString("de-DE", { weekday: "short" }),
+          kcal: b.kcal,
+          kosten: b.kosten,
+        });
+      }
+      setTrend(reihe);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const heute = trend && trend[trend.length - 1];
+  const totals = heute
+    ? { kcal: heute.kcal, kosten: heute.kosten, kcalProEuro: heute.kosten > 0 ? heute.kcal / heute.kosten : 0 }
+    : { kcal: 0, kosten: 0, kcalProEuro: 0 };
+  const hatEintraege = trend && trend.some((t) => t.kcal > 0 || t.kosten > 0);
+  const maxKcal = trend ? Math.max(1, ...trend.map((t) => t.kcal)) : 1;
+  const maxKosten = trend ? Math.max(1, ...trend.map((t) => t.kosten)) : 1;
+  const schnittKcal = trend ? trend.reduce((s, t) => s + t.kcal, 0) / TREND_TAGE : 0;
+  const schnittKosten = trend ? trend.reduce((s, t) => s + t.kosten, 0) / TREND_TAGE : 0;
 
   return (
     <div className="space-y-4 pb-4">
@@ -1201,11 +1311,45 @@ function DashboardTab({ log }) {
         </p>
       </Bon>
 
-      {log.length === 0 && (
-        <Bon className="p-4">
+      <Bon className="p-4">
+        <SectionLabel>Verlauf — letzte {TREND_TAGE} Tage</SectionLabel>
+        {error && <p className="text-[12px] text-[#A85A3F] mb-2">{error}</p>}
+        {trend === null && <p className="text-sm text-[#79705A] italic">Lädt…</p>}
+        {trend && !hatEintraege && (
           <p className="text-sm text-[#79705A] italic">Noch keine Einträge — buch im Log-Tab deine erste Mahlzeit ein.</p>
-        </Bon>
-      )}
+        )}
+        {trend && hatEintraege && (
+          <React.Fragment>
+            <DottedRow left="Ø kcal / Tag" right={kcalFmt(schnittKcal)} accent="#5C6B4F" />
+            <DottedRow left="Ø Kosten / Tag" right={euro(schnittKosten)} accent="#8C6A1F" />
+            <div className="h-px bg-[#DCD4C0] my-3" />
+            <div className="text-[10px] uppercase tracking-wide text-[#6E6650] mb-1.5">kcal</div>
+            <div className="space-y-1 mb-3">
+              {trend.map((t) => (
+                <div key={t.key} className="flex items-center gap-2 text-[11px]">
+                  <span className="w-7 shrink-0 text-[#79705A]">{t.label}</span>
+                  <div className="flex-1 h-2.5 bg-[#EFEADA] rounded-sm overflow-hidden">
+                    <div className="h-full bg-[#5C6B4F]" style={{ width: `${(t.kcal / maxKcal) * 100}%` }} />
+                  </div>
+                  <span className="w-12 text-right font-mono text-[#2B2A28]">{t.kcal > 0 ? kcalFmt(t.kcal) : "–"}</span>
+                </div>
+              ))}
+            </div>
+            <div className="text-[10px] uppercase tracking-wide text-[#6E6650] mb-1.5">Kosten</div>
+            <div className="space-y-1">
+              {trend.map((t) => (
+                <div key={t.key} className="flex items-center gap-2 text-[11px]">
+                  <span className="w-7 shrink-0 text-[#79705A]">{t.label}</span>
+                  <div className="flex-1 h-2.5 bg-[#EFEADA] rounded-sm overflow-hidden">
+                    <div className="h-full bg-[#8C6A1F]" style={{ width: `${(t.kosten / maxKosten) * 100}%` }} />
+                  </div>
+                  <span className="w-12 text-right font-mono text-[#2B2A28]">{t.kosten > 0 ? euro(t.kosten) : "–"}</span>
+                </div>
+              ))}
+            </div>
+          </React.Fragment>
+        )}
+      </Bon>
     </div>
   );
 }
@@ -1412,8 +1556,8 @@ function HilfeGuide() {
         <ol className="space-y-3 text-sm text-[#2B2A28] list-decimal list-inside">
           <li><strong>Zutaten anlegen</strong> — Name, Einheit (g, ml oder Stück), kcal je Einheit und was du beim Einkauf bezahlt hast (Menge + Preis). Preis pro Einheit wird automatisch berechnet.</li>
           <li><strong>Rezepte bauen</strong> — Zutaten mit ihrer jeweiligen Menge zusammenstellen, kcal und Kosten pro Portion siehst du live.</li>
-          <li><strong>Mahlzeiten einbuchen</strong> — im Log-Tab ein Rezept, eine Kategorie und einen Portionsfaktor wählen.</li>
-          <li><strong>Bilanz ansehen</strong> — Tagesüberblick über kcal und Kosten.</li>
+          <li><strong>Mahlzeiten einbuchen</strong> — im Log-Tab ein Rezept, eine Kategorie und einen Portionsfaktor wählen. Mit den Pfeilen im Log-Tab durch vergangene Tage blättern.</li>
+          <li><strong>Bilanz ansehen</strong> — Tagesüberblick plus Verlauf über kcal und Kosten der letzten 14 Tage.</li>
         </ol>
       </Bon>
       <Bon className="p-4">
@@ -1466,6 +1610,9 @@ function MainApp({ session }) {
   const [hiddenIds, setHiddenIds] = useState(() => new Set());
   const [toast, setToast] = useState(null); // { message, onUndo }
   const pendingTimers = React.useRef({});
+  const [logDate, setLogDate] = useState(() => startOfDayISO());
+  const [logLoading, setLogLoading] = useState(false);
+  const logLoadedOnce = React.useRef(false);
 
   useEffect(() => () => {
     Object.values(pendingTimers.current).forEach(clearTimeout);
@@ -1498,6 +1645,46 @@ function MainApp({ session }) {
     if (menuDepthRef.current > 0) history.go(-menuDepthRef.current);
     else setMenuView(null);
   };
+
+  const loadLog = async (dayIso) => {
+    setLogLoading(true);
+    const von = dayIso;
+    const bis = addDays(dayIso, 1).toISOString();
+    const { data, error } = await sb
+      .from("log_eintraege")
+      .select("*")
+      .gte("zeit", von)
+      .lt("zeit", bis)
+      .order("zeit", { ascending: false });
+    setLogLoading(false);
+    if (error) { setLoadError(error.message); return; }
+    setLog(
+      data.map((e) => ({
+        id: e.id,
+        rezeptName: e.rezept_name,
+        faktor: e.faktor,
+        kcal: e.kcal,
+        kosten: e.kosten,
+        zeit: e.zeit,
+        kategorie: e.kategorie,
+      }))
+    );
+  };
+
+  // Der Initial-Load (unten) lädt den heutigen Log schon mit — dieser Effekt greift nur bei
+  // einem Tageswechsel über die Prev/Next-Buttons, nicht beim ersten Rendern.
+  useEffect(() => {
+    if (!logLoadedOnce.current) {
+      logLoadedOnce.current = true;
+      return;
+    }
+    loadLog(logDate);
+  }, [logDate]);
+
+  const gotoPrevDay = () => setLogDate((d) => addDays(d, -1).toISOString());
+  const gotoNextDay = () => setLogDate((d) => addDays(d, 1).toISOString());
+  const gotoToday = () => setLogDate(startOfDayISO());
+  const logIsToday = isSameLocalDay(logDate, new Date().toISOString());
 
   const softDelete = (id, label, commitFn, removeFromState) => {
     setHiddenIds((prev) => new Set(prev).add(id));
@@ -1532,7 +1719,7 @@ function MainApp({ session }) {
       const [zRes, rRes, lRes] = await Promise.all([
         sb.from("zutaten").select("*").order("created_at"),
         sb.from("rezepte").select("id, name, portionen, rezept_zutaten(zutat_id, menge)").order("created_at"),
-        sb.from("log_eintraege").select("*").gte("zeit", startOfTodayISO()).order("zeit", { ascending: false }),
+        sb.from("log_eintraege").select("*").gte("zeit", startOfDayISO()).order("zeit", { ascending: false }),
       ]);
       if (cancelled) return;
       const err = zRes.error || rRes.error || lRes.error;
@@ -1579,6 +1766,17 @@ function MainApp({ session }) {
     const { error: zErr } = await sb.from("rezept_zutaten").insert(zeilen);
     if (zErr) { setLoadError(zErr.message); return; }
     setRezepte((r) => [...r, { id: rezeptRow.id, name: rezeptRow.name, portionen: rezeptRow.portionen, zutaten: lines }]);
+  };
+
+  const updateRezept = async (id, { name, portionen, zutaten: lines }) => {
+    const { data: rezeptRow, error } = await sb.from("rezepte").update({ name, portionen }).eq("id", id).select().single();
+    if (error) { setLoadError(error.message); return; }
+    const { error: delErr } = await sb.from("rezept_zutaten").delete().eq("rezept_id", id);
+    if (delErr) { setLoadError(delErr.message); return; }
+    const zeilen = lines.map((l) => ({ rezept_id: id, zutat_id: l.zutatId, menge: l.menge }));
+    const { error: insErr } = await sb.from("rezept_zutaten").insert(zeilen);
+    if (insErr) { setLoadError(insErr.message); return; }
+    setRezepte((r) => r.map((x) => (x.id === id ? { id, name: rezeptRow.name, portionen: rezeptRow.portionen, zutaten: lines } : x)));
   };
 
   const addLogEntry = async (rezept, faktor, totals, kategorie) => {
@@ -1674,9 +1872,23 @@ function MainApp({ session }) {
         ) : (
           <React.Fragment>
             {tab === "zutaten" && <ZutatenTab zutaten={visibleZutaten} onAdd={addZutat} onDelete={deleteZutat} onUpdatePreis={updateZutatPreis} />}
-            {tab === "rezepte" && <RezepteTab zutaten={visibleZutaten} rezepte={visibleRezepte} onSave={addRezept} onDelete={deleteRezept} />}
-            {tab === "log" && <LogTab rezepte={visibleRezepte} zutaten={visibleZutaten} log={visibleLog} onAdd={addLogEntry} onDelete={deleteLogEntry} />}
-            {tab === "dashboard" && <DashboardTab log={visibleLog} />}
+            {tab === "rezepte" && <RezepteTab zutaten={visibleZutaten} rezepte={visibleRezepte} onSave={addRezept} onUpdate={updateRezept} onDelete={deleteRezept} />}
+            {tab === "log" && (
+              <LogTab
+                rezepte={visibleRezepte}
+                zutaten={visibleZutaten}
+                log={visibleLog}
+                logDate={logDate}
+                logLoading={logLoading}
+                logIsToday={logIsToday}
+                onPrevDay={gotoPrevDay}
+                onNextDay={gotoNextDay}
+                onToday={gotoToday}
+                onAdd={addLogEntry}
+                onDelete={deleteLogEntry}
+              />
+            )}
+            {tab === "dashboard" && <DashboardTab />}
           </React.Fragment>
         )}
       </main>
