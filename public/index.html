@@ -98,11 +98,12 @@ function SectionLabel({ children }) {
   );
 }
 
-function IconBtn({ onClick, children, danger }) {
+function IconBtn({ onClick, children, danger, label }) {
   return (
     <button
       onClick={onClick}
-      className={`p-1.5 rounded-full transition-colors ${
+      aria-label={label}
+      className={`min-w-[40px] min-h-[40px] flex items-center justify-center rounded-full transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#6B6450] ${
         danger ? "hover:bg-[#F0DCD4] text-[#A85A3F]" : "hover:bg-[#E9E3D2] text-[#6B6450]"
       }`}
     >
@@ -177,7 +178,7 @@ function AuthScreen() {
         <button
           type="button"
           onClick={googleSignIn}
-          className="w-full flex items-center justify-center gap-2 py-2 rounded-sm border border-[#B9AF97] text-sm text-[#2B2A28] hover:bg-[#F0ECDC] mb-3"
+          className="w-full flex items-center justify-center gap-2 py-2 rounded-sm border border-[#B9AF97] text-sm text-[#2B2A28] hover:bg-[#F0ECDC] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] mb-3"
         >
           <svg width="16" height="16" viewBox="0 0 48 48">
             <path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.9 29.3 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.9 1.2 8 3.1l5.7-5.7C34.6 6.1 29.6 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.7-.4-3.5z"/>
@@ -198,19 +199,23 @@ function AuthScreen() {
           <input
             type="email"
             required
+            aria-label="E-Mail"
+            autoComplete="email"
             placeholder="E-Mail"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] outline-none py-1.5 text-sm placeholder:text-[#A79E85]"
+            className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1.5 text-sm placeholder:text-[#A79E85]"
           />
           <input
             type="password"
             required
             minLength={6}
+            aria-label="Passwort"
+            autoComplete={mode === "login" ? "current-password" : "new-password"}
             placeholder="Passwort (mind. 6 Zeichen)"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] outline-none py-1.5 text-sm placeholder:text-[#A79E85]"
+            className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1.5 text-sm placeholder:text-[#A79E85]"
           />
 
           {error && <p className="text-[12px] text-[#A85A3F]">{error}</p>}
@@ -219,7 +224,7 @@ function AuthScreen() {
           <button
             type="submit"
             disabled={busy}
-            className="w-full py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41] disabled:opacity-50"
+            className="w-full py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-50"
           >
             {mode === "login" ? "Anmelden" : "Registrieren"}
           </button>
@@ -227,11 +232,17 @@ function AuthScreen() {
 
         <button
           onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); setInfo(""); }}
-          className="mt-3 w-full text-center text-[12px] text-[#6B6450] underline"
+          className="mt-3 w-full text-center text-[12px] text-[#6B6450] underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#5C6B4F]"
         >
           {mode === "login" ? "Noch kein Konto? Registrieren" : "Schon ein Konto? Anmelden"}
         </button>
       </Bon>
+
+      <footer className="mt-4 text-center text-[11px] text-[#8A8163]">
+        <a href="/impressum.html" className="underline">Impressum</a>
+        <span className="mx-2">·</span>
+        <a href="/datenschutz.html" className="underline">Datenschutz</a>
+      </footer>
     </div>
   );
 }
@@ -240,9 +251,14 @@ function AuthScreen() {
 function ZutatenTab({ zutaten, onAdd }) {
   const [form, setForm] = useState({ name: "", kcal100: "", einkaufsmenge: "", einkaufspreis: "" });
   const [busy, setBusy] = useState(false);
+  const [hint, setHint] = useState("");
 
   const add = async () => {
-    if (!form.name || !form.kcal100 || !form.einkaufsmenge || !form.einkaufspreis) return;
+    if (!form.name || !form.kcal100 || !form.einkaufsmenge || !form.einkaufspreis) {
+      setHint("Bitte alle Felder ausfüllen.");
+      return;
+    }
+    setHint("");
     setBusy(true);
     try {
       await onAdd({
@@ -278,37 +294,45 @@ function ZutatenTab({ zutaten, onAdd }) {
         <div className="grid grid-cols-2 gap-2">
           <input
             placeholder="Name"
+            aria-label="Name der Zutat"
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
-            className="col-span-2 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] outline-none py-1 text-sm placeholder:text-[#A79E85]"
+            className="col-span-2 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
           />
           <input
             placeholder="kcal / 100g"
+            aria-label="Kilokalorien pro 100 Gramm"
             type="number"
+            inputMode="decimal"
             value={form.kcal100}
             onChange={(e) => setForm({ ...form, kcal100: e.target.value })}
-            className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] outline-none py-1 text-sm placeholder:text-[#A79E85]"
+            className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
           />
           <input
             placeholder="Einkaufsmenge (g)"
+            aria-label="Einkaufsmenge in Gramm"
             type="number"
+            inputMode="decimal"
             value={form.einkaufsmenge}
             onChange={(e) => setForm({ ...form, einkaufsmenge: e.target.value })}
-            className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] outline-none py-1 text-sm placeholder:text-[#A79E85]"
+            className="bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
           />
           <input
             placeholder="Einkaufspreis (€)"
+            aria-label="Einkaufspreis in Euro"
             type="number"
             step="0.01"
+            inputMode="decimal"
             value={form.einkaufspreis}
             onChange={(e) => setForm({ ...form, einkaufspreis: e.target.value })}
-            className="col-span-2 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] outline-none py-1 text-sm placeholder:text-[#A79E85]"
+            className="col-span-2 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm placeholder:text-[#A79E85]"
           />
         </div>
+        {hint && <p className="mt-2 text-[12px] text-[#A85A3F]">{hint}</p>}
         <button
           onClick={add}
           disabled={busy}
-          className="mt-3 w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] transition-colors disabled:opacity-50"
+          className="mt-3 w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-50"
         >
           <PlusIcon size={15} /> Zutat speichern
         </button>
@@ -329,12 +353,14 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
   const [pickZutat, setPickZutat] = useState("");
   const [pickMenge, setPickMenge] = useState("");
   const [busy, setBusy] = useState(false);
+  const [hint, setHint] = useState("");
 
   const startNew = () => {
     setEditing("new");
     setName("");
     setPortionen(1);
     setLines([]);
+    setHint("");
   };
 
   const berechne = (linesArg, portionenArg) => {
@@ -356,7 +382,11 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
   };
 
   const save = async () => {
-    if (!name || lines.length === 0) return;
+    if (!name || lines.length === 0) {
+      setHint(!name ? "Bitte einen Namen für das Rezept eingeben." : "Bitte mindestens eine Zutat hinzufügen.");
+      return;
+    }
+    setHint("");
     setBusy(true);
     try {
       await onSave({ name, portionen, zutaten: lines });
@@ -374,18 +404,20 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
           <SectionLabel>Rezept zusammenstellen</SectionLabel>
           <input
             placeholder="Name des Rezepts"
+            aria-label="Name des Rezepts"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] outline-none py-1 text-sm mb-2 placeholder:text-[#A79E85]"
+            className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm mb-2 placeholder:text-[#A79E85]"
           />
           <div className="flex items-center gap-2 mb-3">
             <label className="text-[13px] text-[#6B6450]">Portionen</label>
             <input
               type="number"
+              inputMode="numeric"
               min={1}
               value={portionen}
               onChange={(e) => setPortionen(parseInt(e.target.value) || 1)}
-              className="w-16 bg-transparent border-b border-[#B9AF97] outline-none py-1 text-sm"
+              className="w-16 bg-transparent border-b border-[#B9AF97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm"
             />
           </div>
 
@@ -394,7 +426,7 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
             return (
               <div key={i} className="flex items-center gap-2">
                 <DottedRow left={`${z?.name || "?"} · ${l.menge}g`} right={""} />
-                <IconBtn danger onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>
+                <IconBtn danger label={`${z?.name || "Position"} entfernen`} onClick={() => setLines((ls) => ls.filter((_, idx) => idx !== i))}>
                   <XIcon size={14} />
                 </IconBtn>
               </div>
@@ -404,8 +436,9 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
           <div className="flex gap-2 mt-2">
             <select
               value={pickZutat}
+              aria-label="Zutat wählen"
               onChange={(e) => setPickZutat(e.target.value)}
-              className="flex-1 bg-transparent border-b border-[#B9AF97] outline-none py-1 text-sm"
+              className="flex-1 bg-transparent border-b border-[#B9AF97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm"
             >
               <option value="">Zutat wählen…</option>
               {zutaten.map((z) => (
@@ -416,12 +449,14 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
             </select>
             <input
               placeholder="g"
+              aria-label="Menge in Gramm"
               type="number"
+              inputMode="decimal"
               value={pickMenge}
               onChange={(e) => setPickMenge(e.target.value)}
-              className="w-16 bg-transparent border-b border-[#B9AF97] outline-none py-1 text-sm"
+              className="w-16 bg-transparent border-b border-[#B9AF97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm"
             />
-            <IconBtn onClick={addLine}>
+            <IconBtn label="Zutat zum Rezept hinzufügen" onClick={addLine}>
               <PlusIcon size={16} />
             </IconBtn>
           </div>
@@ -436,17 +471,19 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
           <DottedRow left="Pro Portion" right={euro(totals.kostenPortion)} accent="#B08628" bold />
         </Bon>
 
+        {hint && <p className="text-[12px] text-[#A85A3F]">{hint}</p>}
+
         <div className="flex gap-2">
           <button
             onClick={() => setEditing(null)}
-            className="flex-1 py-2 rounded-sm border border-[#B9AF97] text-sm text-[#6B6450]"
+            className="flex-1 py-2 rounded-sm border border-[#B9AF97] text-sm text-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450]"
           >
             Abbrechen
           </button>
           <button
             onClick={save}
             disabled={busy}
-            className="flex-1 py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41] disabled:opacity-50"
+            className="flex-1 py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-50"
           >
             Rezept speichern
           </button>
@@ -472,7 +509,7 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
       })}
       <button
         onClick={startNew}
-        className="w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41]"
+        className="w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28]"
       >
         <PlusIcon size={15} /> Neues Rezept
       </button>
@@ -486,6 +523,7 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
   const [faktor, setFaktor] = useState(1);
   const [kategorie, setKategorie] = useState(MAHLZEIT_KATEGORIEN[0]);
   const [busy, setBusy] = useState(false);
+  const [hint, setHint] = useState("");
 
   const berechne = (rezept, faktorArg) => {
     let kcal = 0, kosten = 0;
@@ -503,7 +541,11 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
 
   const addEntry = async () => {
     const rezept = rezepte.find((r) => r.id === rezeptId);
-    if (!rezept) return;
+    if (!rezept) {
+      setHint("Bitte ein Rezept auswählen.");
+      return;
+    }
+    setHint("");
     const t = berechne(rezept, faktor);
     setBusy(true);
     try {
@@ -525,8 +567,9 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
         <SectionLabel>Mahlzeit einbuchen — {heute}</SectionLabel>
         <select
           value={kategorie}
+          aria-label="Mahlzeit-Kategorie"
           onChange={(e) => setKategorie(e.target.value)}
-          className="w-full bg-transparent border-b border-[#B9AF97] outline-none py-1 text-sm mb-2"
+          className="w-full bg-transparent border-b border-[#B9AF97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm mb-2"
         >
           {MAHLZEIT_KATEGORIEN.map((kat) => (
             <option key={kat} value={kat}>
@@ -537,8 +580,9 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
         <div className="flex gap-2 mb-2">
           <select
             value={rezeptId}
+            aria-label="Rezept wählen"
             onChange={(e) => setRezeptId(e.target.value)}
-            className="flex-1 bg-transparent border-b border-[#B9AF97] outline-none py-1 text-sm"
+            className="flex-1 bg-transparent border-b border-[#B9AF97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm"
           >
             <option value="">Rezept wählen…</option>
             {rezepte.map((r) => (
@@ -549,17 +593,20 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
           </select>
           <input
             type="number"
+            inputMode="decimal"
             step="0.25"
             min="0.25"
+            aria-label="Portionsfaktor"
             value={faktor}
             onChange={(e) => setFaktor(parseFloat(e.target.value) || 1)}
-            className="w-16 bg-transparent border-b border-[#B9AF97] outline-none py-1 text-sm"
+            className="w-16 bg-transparent border-b border-[#B9AF97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm"
           />
         </div>
+        {hint && <p className="text-[12px] text-[#A85A3F] mb-2">{hint}</p>}
         <button
           onClick={addEntry}
           disabled={busy}
-          className="w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-50"
         >
           <PlusIcon size={15} /> Einbuchen ({faktor}× Portion)
         </button>
@@ -578,7 +625,7 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
                   right={euro(e.kosten)}
                   sub={`${kcalFmt(e.kcal)} kcal`}
                 />
-                <IconBtn danger onClick={() => onDelete(e.id)}>
+                <IconBtn danger label={`${e.rezeptName} löschen`} onClick={() => onDelete(e.id)}>
                   <TrashIcon size={13} />
                 </IconBtn>
               </div>
@@ -734,11 +781,17 @@ function MainApp({ session }) {
         <div>
           <h1 className="text-[19px] font-bold tracking-tight text-[#2B2A28]">Kalorien &amp; Kosten</h1>
           <p className="text-[12px] text-[#8A8163]">jede Zutat, doppelt verbucht</p>
+          <p className="text-[10px] text-[#A79E85] mt-1">
+            <a href="/impressum.html" className="underline">Impressum</a>
+            <span className="mx-1">·</span>
+            <a href="/datenschutz.html" className="underline">Datenschutz</a>
+          </p>
         </div>
         <button
           onClick={() => sb.auth.signOut()}
-          className="flex items-center gap-1 text-[11px] text-[#8A8163] hover:text-[#6B6450] pt-1"
+          className="flex items-center gap-1 text-[11px] text-[#8A8163] hover:text-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450] pt-1"
           title={session.user.email}
+          aria-label={`Abmelden (angemeldet als ${session.user.email})`}
         >
           <LogOutIcon size={14} /> Abmelden
         </button>
@@ -773,7 +826,8 @@ function MainApp({ session }) {
             <button
               key={t.id}
               onClick={() => setTab(t.id)}
-              className="flex flex-col items-center gap-0.5 px-3 py-1"
+              aria-current={active ? "page" : undefined}
+              className="flex flex-col items-center gap-0.5 px-3 py-2 min-h-[44px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-[#5C6B4F]"
             >
               <Icon size={18} color={active ? "#5C6B4F" : "#A79E85"} />
               <span className={`text-[10px] ${active ? "text-[#5C6B4F] font-semibold" : "text-[#A79E85]"}`}>
