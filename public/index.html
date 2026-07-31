@@ -69,6 +69,7 @@ const AlertTriangleIcon = (p) => <Icon {...p}><path d="M10.29 3.86 1.82 18a2 2 0
 const ExternalLinkIcon = (p) => <Icon {...p}><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></Icon>;
 const CameraIcon = (p) => <Icon {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.2"/></Icon>;
 const LoaderIcon = (p) => <Icon {...p} className={`animate-spin ${p.className || ""}`}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></Icon>;
+const BarcodeIcon = (p) => <Icon {...p}><path d="M3 5v14"/><path d="M8 5v14"/><path d="M12 5v14"/><path d="M17 5v14"/><path d="M21 5v14"/></Icon>;
 
 // Weitere Slots einfach ergänzen, z.B. "Zweites Frühstück", "Nachmittag" — keine DB-Änderung nötig.
 const MAHLZEIT_KATEGORIEN = ["Frühstück", "Mittagessen", "Abendessen", "Snack"];
@@ -120,6 +121,49 @@ function findZutatByName(name, zutaten) {
   if (!name) return null;
   const target = name.trim().toLowerCase();
   return zutaten.find((z) => z.name.trim().toLowerCase() === target) || null;
+}
+
+// ---------- Artikel-Scan (Barcode) ----------
+// Erst kostenlose, geräteseitige Erkennung versuchen; nur wenn die nicht verfügbar ist
+// oder nichts findet, als Fallback einen (kostenpflichtigen) Claude-Vision-Call nutzen.
+async function detectBarcodeNative(file) {
+  if (!("BarcodeDetector" in window)) return null;
+  try {
+    const detector = new window.BarcodeDetector({ formats: ["ean_13", "ean_8", "upc_a", "upc_e", "code_128"] });
+    const bitmap = await createImageBitmap(file);
+    const results = await detector.detect(bitmap);
+    return results.length > 0 ? results[0].rawValue : null;
+  } catch {
+    return null;
+  }
+}
+
+async function detectBarcodeViaClaude(file) {
+  const base64 = await fileToBase64(file);
+  const text = await callClaude({
+    system:
+      'Lies die Barcode-Nummer (EAN/UPC, meist 8 oder 13 Ziffern) unter dem Barcode auf diesem Produktfoto ab. Antworte ausschließlich mit reinem JSON, kein Markdown, keine Erklärung: {"barcode":"1234567890123"} oder {"barcode":null}, falls keine Nummer lesbar ist.',
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "image", source: { type: "base64", media_type: file.type || "image/jpeg", data: base64 } },
+          { type: "text", text: "Welche Barcode-Nummer steht auf diesem Foto?" },
+        ],
+      },
+    ],
+    maxTokens: 100,
+  });
+  const parsed = extractJson(text);
+  return parsed.barcode || null;
+}
+
+async function lookupOpenFoodFacts(barcode) {
+  const res = await fetch(`https://world.openfoodfacts.org/api/v2/product/${encodeURIComponent(barcode)}.json?fields=product_name,nutriments`);
+  const data = await res.json();
+  if (data.status !== 1 || !data.product) return null;
+  const kcal = data.product.nutriments && data.product.nutriments["energy-kcal_100g"];
+  return { name: data.product.product_name || "", kcal100: typeof kcal === "number" ? kcal : null };
 }
 
 // ---------- Kleine UI-Bausteine im Kassenbon-Stil ----------
@@ -388,6 +432,41 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
   const [scanBusy, setScanBusy] = useState(false);
   const [scanError, setScanError] = useState("");
   const [scanResults, setScanResults] = useState(null);
+  const [barcodeBusy, setBarcodeBusy] = useState(false);
+  const [barcodeError, setBarcodeError] = useState("");
+
+  const handleBarcodeScan = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = "";
+    if (!file) return;
+    setBarcodeError("");
+    setBarcodeBusy(true);
+    try {
+      let barcode = await detectBarcodeNative(file);
+      if (!barcode) barcode = await detectBarcodeViaClaude(file);
+      if (!barcode) {
+        setBarcodeError("Kein Barcode erkannt. Näher/schärfer fotografieren oder Werte manuell eintragen.");
+        return;
+      }
+      const produkt = await lookupOpenFoodFacts(barcode);
+      if (!produkt) {
+        setBarcodeError(`Barcode ${barcode} erkannt, aber kein Produkt bei OpenFoodFacts gefunden.`);
+        return;
+      }
+      setForm((f) => ({
+        ...f,
+        name: produkt.name || f.name,
+        kcal100: produkt.kcal100 != null ? String(produkt.kcal100) : f.kcal100,
+      }));
+      if (produkt.kcal100 == null) {
+        setBarcodeError("Name übernommen, aber keine kcal-Angabe bei OpenFoodFacts gefunden — bitte manuell ergänzen.");
+      }
+    } catch (err) {
+      setBarcodeError(err.message || "Barcode konnte nicht ausgewertet werden.");
+    } finally {
+      setBarcodeBusy(false);
+    }
+  };
 
   const handleScan = async (e) => {
     const file = e.target.files && e.target.files[0];
@@ -493,6 +572,12 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
 
       <Bon className="p-4">
         <SectionLabel>Neue Zutat erfassen</SectionLabel>
+        <label className="w-full flex items-center justify-center gap-1.5 border border-[#B9AF97] text-[#6B6450] text-sm font-medium py-2 rounded-sm hover:bg-[#F0ECDC] cursor-pointer mb-3 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[#6B6450]">
+          {barcodeBusy ? <LoaderIcon size={15} /> : <BarcodeIcon size={15} />}
+          {barcodeBusy ? "Wird gesucht…" : "Artikel scannen (Barcode)"}
+          <input type="file" accept="image/*" capture="environment" onChange={handleBarcodeScan} disabled={barcodeBusy} className="hidden" />
+        </label>
+        {barcodeError && <p className="mb-2 text-[12px] text-[#A85A3F]">{barcodeError}</p>}
         <form onSubmit={add}>
           <div className="grid grid-cols-2 gap-2">
             <input
