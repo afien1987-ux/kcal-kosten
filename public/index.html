@@ -530,8 +530,9 @@ function AuthScreen() {
 }
 
 // ---------- Zutaten-Tab ----------
-function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
+function ZutatenTab({ zutaten, onAdd, onUpdate, onDelete, onUpdatePreis }) {
   const [form, setForm] = useState({ name: "", kcal100: "", einheit: "g", einkaufsmenge: "", einkaufspreis: "" });
+  const [editingZutat, setEditingZutat] = useState(null); // Zutat-Objekt, wenn Formular gerade eine bestehende Zutat statt einer neuen bearbeitet
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState("");
   const [scanBusy, setScanBusy] = useState(false);
@@ -666,6 +667,28 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
     }
   };
 
+  const startEditZutat = (z) => {
+    setEditingZutat(z);
+    setForm({
+      name: z.name,
+      kcal100: String(z.kcal100),
+      einheit: z.einheit,
+      einkaufsmenge: String(z.einkaufsmenge),
+      einkaufspreis: String(z.einkaufspreis),
+    });
+    setHint("");
+  };
+
+  const cancelEditZutat = () => {
+    setEditingZutat(null);
+    setForm({ name: "", kcal100: "", einheit: "g", einkaufsmenge: "", einkaufspreis: "" });
+    setHint("");
+  };
+
+  useEffect(() => {
+    if (!manageMode) cancelEditZutat();
+  }, [manageMode]);
+
   const add = async (e) => {
     e.preventDefault();
     if (!form.name || !form.kcal100 || !form.einkaufsmenge || !form.einkaufspreis) {
@@ -682,9 +705,14 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
     setHint("");
     setBusy(true);
     try {
-      const ok = await onAdd({ name: form.name, kcal100, einheit: form.einheit, einkaufsmenge, einkaufspreis });
-      if (ok) setForm({ name: "", kcal100: "", einheit: form.einheit, einkaufsmenge: "", einkaufspreis: "" });
-      else setHint("Speichern fehlgeschlagen — bitte erneut versuchen.");
+      const werte = { name: form.name, kcal100, einheit: form.einheit, einkaufsmenge, einkaufspreis };
+      const ok = editingZutat ? await onUpdate(editingZutat.id, werte) : await onAdd(werte);
+      if (ok) {
+        setEditingZutat(null);
+        setForm({ name: "", kcal100: "", einheit: form.einheit, einkaufsmenge: "", einkaufspreis: "" });
+      } else {
+        setHint("Speichern fehlgeschlagen — bitte erneut versuchen.");
+      }
     } finally {
       setBusy(false);
     }
@@ -709,7 +737,7 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
       {manageMode && (
         <>
           <Bon className="p-4">
-            <SectionLabel>Neue Zutat erfassen</SectionLabel>
+            <SectionLabel>{editingZutat ? `„${editingZutat.name}" bearbeiten` : "Neue Zutat erfassen"}</SectionLabel>
             <label className="w-full flex items-center justify-center gap-1.5 border border-[#B9AF97] text-[#6B6450] text-sm font-medium py-2 rounded-sm hover:bg-[#F0ECDC] cursor-pointer mb-3 focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-[#6B6450]">
               {barcodeBusy ? <LoaderIcon size={15} /> : <BarcodeIcon size={15} />}
               {barcodeBusy ? "Wird gesucht…" : "Artikel scannen (Barcode)"}
@@ -776,13 +804,25 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
                 />
               </div>
               {hint && <p className="mt-2 text-[12px] text-[#A85A3F]">{hint}</p>}
-              <button
-                type="submit"
-                disabled={busy}
-                className="mt-3 w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-50"
-              >
-                <PlusIcon size={15} /> Zutat speichern
-              </button>
+              <div className="flex gap-2 mt-3">
+                {editingZutat && (
+                  <button
+                    type="button"
+                    onClick={cancelEditZutat}
+                    className="flex-1 py-2 rounded-sm border border-[#B9AF97] text-sm text-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450]"
+                  >
+                    Abbrechen
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  disabled={busy}
+                  className="flex-1 flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2B2A28] disabled:opacity-50"
+                >
+                  {editingZutat ? null : <PlusIcon size={15} />}
+                  {editingZutat ? "Änderungen speichern" : "Zutat speichern"}
+                </button>
+              </div>
             </form>
           </Bon>
 
@@ -823,9 +863,14 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
               </div>
             </div>
             {manageMode && (
-              <IconBtn danger label={`${z.name} löschen`} onClick={() => onDelete(z)}>
-                <TrashIcon size={13} />
-              </IconBtn>
+              <React.Fragment>
+                <IconBtn label={`${z.name} bearbeiten`} onClick={() => startEditZutat(z)}>
+                  <PencilIcon size={13} />
+                </IconBtn>
+                <IconBtn danger label={`${z.name} löschen`} onClick={() => onDelete(z)}>
+                  <TrashIcon size={13} />
+                </IconBtn>
+              </React.Fragment>
             )}
           </div>
         ))}
@@ -1822,7 +1867,7 @@ function HilfeGuide() {
       <Bon className="p-4">
         <SectionLabel>So funktioniert's</SectionLabel>
         <ol className="space-y-3 text-sm text-[#2B2A28] list-decimal list-inside">
-          <li><strong>Zutaten anlegen</strong> — Name, Einheit (g, ml oder Stück), kcal je Einheit und was du beim Einkauf bezahlt hast (Menge + Preis). Preis pro Einheit wird automatisch berechnet.</li>
+          <li><strong>Zutaten anlegen</strong> — Name, Einheit (g, ml oder Stück), kcal je Einheit und was du beim Einkauf bezahlt hast (Menge + Preis). Preis pro Einheit wird automatisch berechnet. Kaufst du etwas nach, im Verwalten-Modus über das Stift-Icon einfach Menge/Preis der bestehenden Zutat aktualisieren statt neu anzulegen.</li>
           <li><strong>Rezepte bauen</strong> — Zutaten mit ihrer jeweiligen Menge zusammenstellen, kcal und Kosten pro Portion siehst du live. Über "Rezept-Vorschlag (KI)" lässt du dir auch einen Vorschlag aus deinen vorhandenen Zutaten erstellen (mit optionaler Kategorie/Ernährungsform), bearbeitbar vor dem Speichern.</li>
           <li><strong>Mahlzeiten einbuchen</strong> — im Log-Tab ein Rezept, eine Kategorie und einen Portionsfaktor wählen. Mit den Pfeilen im Log-Tab durch vergangene Tage blättern.</li>
           <li><strong>Bilanz ansehen</strong> — Tagesüberblick plus Verlauf über kcal und Kosten der letzten 14 Tage.</li>
@@ -2133,6 +2178,13 @@ function MainApp({ session }) {
     setZutaten((z) => z.map((x) => (x.id === id ? data : x)));
   };
 
+  const updateZutat = async (id, werte) => {
+    const { data, error } = await sb.from("zutaten").update(werte).eq("id", id).select().single();
+    if (error) { setLoadError(error.message); return false; }
+    setZutaten((z) => z.map((x) => (x.id === id ? data : x)));
+    return true;
+  };
+
   const deleteZutat = (zutat) => {
     const verwendetIn = rezepte.filter((r) => r.zutaten.some((l) => l.zutatId === zutat.id));
     if (verwendetIn.length > 0) {
@@ -2197,7 +2249,15 @@ function MainApp({ session }) {
           </Bon>
         ) : (
           <React.Fragment>
-            {tab === "zutaten" && <ZutatenTab zutaten={visibleZutaten} onAdd={addZutat} onDelete={deleteZutat} onUpdatePreis={updateZutatPreis} />}
+            {tab === "zutaten" && (
+              <ZutatenTab
+                zutaten={visibleZutaten}
+                onAdd={addZutat}
+                onUpdate={updateZutat}
+                onDelete={deleteZutat}
+                onUpdatePreis={updateZutatPreis}
+              />
+            )}
             {tab === "rezepte" && <RezepteTab zutaten={visibleZutaten} rezepte={visibleRezepte} onSave={addRezept} onUpdate={updateRezept} onDelete={deleteRezept} />}
             {tab === "log" && (
               <LogTab
