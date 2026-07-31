@@ -65,6 +65,7 @@ const HelpCircleIcon = (p) => <Icon {...p}><circle cx="12" cy="12" r="10"/><path
 const CoffeeIcon = (p) => <Icon {...p}><path d="M17 8h1a4 4 0 1 1 0 8h-1"/><path d="M3 8h14v9a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4Z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></Icon>;
 const UserIcon = (p) => <Icon {...p}><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-6 8-6s8 2 8 6"/></Icon>;
 const ChevronRightIcon = (p) => <Icon {...p}><path d="m9 18 6-6-6-6"/></Icon>;
+const ChevronDownIcon = (p) => <Icon {...p}><path d="m6 9 6 6 6-6"/></Icon>;
 const AlertTriangleIcon = (p) => <Icon {...p}><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></Icon>;
 const ExternalLinkIcon = (p) => <Icon {...p}><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></Icon>;
 const CameraIcon = (p) => <Icon {...p}><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.2"/></Icon>;
@@ -1386,26 +1387,46 @@ function LogTab({ rezepte, zutaten, log, logDate, logLoading, logIsToday, onPrev
   const [kategorie, setKategorie] = useState(MAHLZEIT_KATEGORIEN[0]);
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState("");
+  const [zutatenAnpassen, setZutatenAnpassen] = useState(false);
+  const [mengenOverride, setMengenOverride] = useState({}); // { [zutatId]: "menge als String" }
 
-  const berechne = (rezept, faktorArg) => {
+  const rezeptObj = rezepte.find((r) => r.id === rezeptId) || null;
+  const round2 = (n) => Math.round(n * 100) / 100;
+
+  // Vorbelegung der Einzelmengen: Rezept-Originalmenge skaliert mit dem Portionsfaktor. Wird bei
+  // jedem Rezept- oder Faktor-Wechsel neu berechnet — manuelle Anpassungen an den Einzelmengen
+  // gelten also nur, bis der Faktor erneut geändert wird (dann wird neu vorbelegt).
+  useEffect(() => {
+    if (!rezeptObj) {
+      setMengenOverride({});
+      return;
+    }
+    const defaults = {};
+    rezeptObj.zutaten.forEach((l) => {
+      defaults[l.zutatId] = String(round2((l.menge * faktor) / rezeptObj.portionen));
+    });
+    setMengenOverride(defaults);
+  }, [rezeptId, faktor]);
+
+  const berechneAusMengen = (rezept, overrides) => {
     let kcal = 0, kosten = 0;
     rezept.zutaten.forEach((l) => {
       const z = zutaten.find((zz) => zz.id === l.zutatId);
       if (!z) return;
+      const menge = parseFloat(overrides[l.zutatId]);
+      if (!Number.isFinite(menge) || menge < 0) return;
       const ref = referenzMenge(z.einheit);
-      kcal += (z.kcal100 / ref) * l.menge;
-      kosten += (preisProReferenz(z) / ref) * l.menge;
+      kcal += (z.kcal100 / ref) * menge;
+      kosten += (preisProReferenz(z) / ref) * menge;
     });
-    const proPortion = { kcal: kcal / rezept.portionen, kosten: kosten / rezept.portionen };
-    return { kcal: proPortion.kcal * faktorArg, kosten: proPortion.kosten * faktorArg };
+    return { kcal, kosten };
   };
 
   const tagesLabel = new Date(logDate).toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
 
   const addEntry = async (e) => {
     e.preventDefault();
-    const rezept = rezepte.find((r) => r.id === rezeptId);
-    if (!rezept) {
+    if (!rezeptObj) {
       setHint("Bitte ein Rezept auswählen.");
       return;
     }
@@ -1414,10 +1435,10 @@ function LogTab({ rezepte, zutaten, log, logDate, logLoading, logIsToday, onPrev
       return;
     }
     setHint("");
-    const t = berechne(rezept, faktor);
+    const t = berechneAusMengen(rezeptObj, mengenOverride);
     setBusy(true);
     try {
-      await onAdd(rezept, faktor, t, kategorie);
+      await onAdd(rezeptObj, faktor, t, kategorie);
     } finally {
       setBusy(false);
     }
@@ -1492,6 +1513,45 @@ function LogTab({ rezepte, zutaten, log, logDate, logLoading, logIsToday, onPrev
             className="w-16 bg-transparent border-b border-[#B9AF97] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-sm"
           />
         </div>
+
+        {rezeptObj && (
+          <div className="mb-2">
+            <button
+              type="button"
+              onClick={() => setZutatenAnpassen((v) => !v)}
+              aria-expanded={zutatenAnpassen}
+              className="flex items-center gap-1 text-[12px] font-medium text-[#6B6450] hover:text-[#2B2A28] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450]"
+            >
+              {zutatenAnpassen ? <ChevronDownIcon size={13} /> : <ChevronRightIcon size={13} />}
+              Zutaten anpassen (optional)
+            </button>
+            {zutatenAnpassen && (
+              <div className="mt-2 space-y-1.5">
+                {rezeptObj.zutaten.map((l) => {
+                  const z = zutaten.find((zz) => zz.id === l.zutatId);
+                  if (!z) return null;
+                  return (
+                    <div key={l.zutatId} className="flex items-center gap-2">
+                      <span className="flex-1 min-w-0 truncate text-[12.5px] text-[#6B6450]">{z.name}</span>
+                      <input
+                        type="number"
+                        inputMode="decimal"
+                        min="0"
+                        step="any"
+                        aria-label={`Menge ${z.name} (${mengenEinheit(z)})`}
+                        value={mengenOverride[l.zutatId] ?? ""}
+                        onChange={(e) => setMengenOverride((m) => ({ ...m, [l.zutatId]: e.target.value }))}
+                        className="w-20 shrink-0 bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#5C6B4F] focus-visible:outline-offset-2 py-1 text-[13px] text-right"
+                      />
+                      <span className="shrink-0 text-[12px] text-[#79705A] w-9">{mengenEinheit(z)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
+
         {hint && <p className="text-[12px] text-[#A85A3F] mb-2">{hint}</p>}
         <button
           type="submit"
@@ -1869,7 +1929,7 @@ function HilfeGuide() {
         <ol className="space-y-3 text-sm text-[#2B2A28] list-decimal list-inside">
           <li><strong>Zutaten anlegen</strong> — Name, Einheit (g, ml oder Stück), kcal je Einheit und was du beim Einkauf bezahlt hast (Menge + Preis). Preis pro Einheit wird automatisch berechnet. Kaufst du etwas nach, im Verwalten-Modus über das Stift-Icon einfach Menge/Preis der bestehenden Zutat aktualisieren statt neu anzulegen.</li>
           <li><strong>Rezepte bauen</strong> — Zutaten mit ihrer jeweiligen Menge zusammenstellen, kcal und Kosten pro Portion siehst du live. Über "Rezept-Vorschlag (KI)" lässt du dir auch einen Vorschlag aus deinen vorhandenen Zutaten erstellen (mit optionaler Kategorie/Ernährungsform), bearbeitbar vor dem Speichern.</li>
-          <li><strong>Mahlzeiten einbuchen</strong> — im Log-Tab ein Rezept, eine Kategorie und einen Portionsfaktor wählen. Mit den Pfeilen im Log-Tab durch vergangene Tage blättern.</li>
+          <li><strong>Mahlzeiten einbuchen</strong> — im Log-Tab ein Rezept, eine Kategorie und einen Portionsfaktor wählen. Über "Zutaten anpassen" lassen sich bei Bedarf einzelne Zutatmengen für diesen Eintrag ändern, ohne das Rezept selbst zu bearbeiten. Mit den Pfeilen im Log-Tab durch vergangene Tage blättern.</li>
           <li><strong>Bilanz ansehen</strong> — Tagesüberblick plus Verlauf über kcal und Kosten der letzten 14 Tage.</li>
         </ol>
       </Bon>
