@@ -35,6 +35,7 @@ create table if not exists log_eintraege (
   faktor numeric not null default 1,
   kcal numeric not null,
   kosten numeric not null,
+  kategorie text not null default 'Sonstiges',
   zeit timestamptz not null default now()
 );
 

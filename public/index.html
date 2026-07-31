@@ -44,6 +44,9 @@ const FlameIcon = (p) => <Icon {...p}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1
 const CoinsIcon = (p) => <Icon {...p}><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></Icon>;
 const LogOutIcon = (p) => <Icon {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></Icon>;
 
+// Weitere Slots einfach ergänzen, z.B. "Zweites Frühstück", "Nachmittag" — keine DB-Änderung nötig.
+const MAHLZEIT_KATEGORIEN = ["Frühstück", "Mittagessen", "Abendessen", "Snack"];
+
 // ---------- Hilfsfunktionen ----------
 const euro = (n) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
 const kcalFmt = (n) => Math.round(n).toLocaleString("de-DE");
@@ -451,6 +454,7 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
 function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
   const [rezeptId, setRezeptId] = useState("");
   const [faktor, setFaktor] = useState(1);
+  const [kategorie, setKategorie] = useState(MAHLZEIT_KATEGORIEN[0]);
   const [busy, setBusy] = useState(false);
 
   const berechne = (rezept, faktorArg) => {
@@ -473,16 +477,33 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
     const t = berechne(rezept, faktor);
     setBusy(true);
     try {
-      await onAdd(rezept, faktor, t);
+      await onAdd(rezept, faktor, t, kategorie);
     } finally {
       setBusy(false);
     }
   };
 
+  const usedKategorien = [...new Set(log.map((e) => e.kategorie))];
+  const katOrder = [...MAHLZEIT_KATEGORIEN, ...usedKategorien.filter((k) => !MAHLZEIT_KATEGORIEN.includes(k))];
+  const gruppen = katOrder
+    .map((kat) => ({ kat, eintraege: log.filter((e) => e.kategorie === kat) }))
+    .filter((g) => g.eintraege.length > 0);
+
   return (
     <div className="space-y-4 pb-4">
       <Bon className="p-4">
         <SectionLabel>Mahlzeit einbuchen — {heute}</SectionLabel>
+        <select
+          value={kategorie}
+          onChange={(e) => setKategorie(e.target.value)}
+          className="w-full bg-transparent border-b border-[#B9AF97] outline-none py-1 text-sm mb-2"
+        >
+          {MAHLZEIT_KATEGORIEN.map((kat) => (
+            <option key={kat} value={kat}>
+              {kat}
+            </option>
+          ))}
+        </select>
         <div className="flex gap-2 mb-2">
           <select
             value={rezeptId}
@@ -517,16 +538,21 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
       <Bon className="p-4">
         <SectionLabel>Heutiger Bon</SectionLabel>
         {log.length === 0 && <p className="text-sm text-[#948B72] italic">Noch nichts gegessen heute.</p>}
-        {log.map((e) => (
-          <div key={e.id} className="flex items-center gap-2">
-            <DottedRow
-              left={`${e.rezeptName}${e.faktor !== 1 ? ` ×${e.faktor}` : ""}`}
-              right={euro(e.kosten)}
-              sub={`${kcalFmt(e.kcal)} kcal`}
-            />
-            <IconBtn danger onClick={() => onDelete(e.id)}>
-              <TrashIcon size={13} />
-            </IconBtn>
+        {gruppen.map((g) => (
+          <div key={g.kat} className="mb-3 last:mb-0">
+            <div className="text-[10px] uppercase tracking-wide text-[#B08628] font-semibold mb-1">{g.kat}</div>
+            {g.eintraege.map((e) => (
+              <div key={e.id} className="flex items-center gap-2">
+                <DottedRow
+                  left={`${e.rezeptName}${e.faktor !== 1 ? ` ×${e.faktor}` : ""}`}
+                  right={euro(e.kosten)}
+                  sub={`${kcalFmt(e.kcal)} kcal`}
+                />
+                <IconBtn danger onClick={() => onDelete(e.id)}>
+                  <TrashIcon size={13} />
+                </IconBtn>
+              </div>
+            ))}
           </div>
         ))}
       </Bon>
@@ -623,6 +649,7 @@ function MainApp({ session }) {
           kcal: e.kcal,
           kosten: e.kosten,
           zeit: e.zeit,
+          kategorie: e.kategorie,
         }))
       );
       setLoading(false);
@@ -645,15 +672,15 @@ function MainApp({ session }) {
     setRezepte((r) => [...r, { id: rezeptRow.id, name: rezeptRow.name, portionen: rezeptRow.portionen, zutaten: lines }]);
   };
 
-  const addLogEntry = async (rezept, faktor, totals) => {
+  const addLogEntry = async (rezept, faktor, totals, kategorie) => {
     const { data, error } = await sb
       .from("log_eintraege")
-      .insert({ rezept_id: rezept.id, rezept_name: rezept.name, faktor, kcal: totals.kcal, kosten: totals.kosten })
+      .insert({ rezept_id: rezept.id, rezept_name: rezept.name, faktor, kcal: totals.kcal, kosten: totals.kosten, kategorie })
       .select()
       .single();
     if (error) { setLoadError(error.message); return; }
     setLog((l) => [
-      { id: data.id, rezeptName: data.rezept_name, faktor: data.faktor, kcal: data.kcal, kosten: data.kosten, zeit: data.zeit },
+      { id: data.id, rezeptName: data.rezept_name, faktor: data.faktor, kcal: data.kcal, kosten: data.kosten, zeit: data.zeit, kategorie: data.kategorie },
       ...l,
     ]);
   };
