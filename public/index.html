@@ -94,6 +94,41 @@ const startOfTodayISO = () => {
   return d.toISOString();
 };
 
+// Für Sub-Ansichten innerhalb eines Tabs (z.B. Verwalten-Modus, Rezept-Formular), die sich
+// wie das Menü über die History API öffnen/schließen sollen, damit der Zurück-Button sie
+// zuerst schließt statt die App zu verlassen. `key` muss innerhalb der aktiven History-Kette
+// eindeutig sein (z.B. verschieden von "menuView").
+function useHistoryFlag(key) {
+  const [active, setActive] = useState(false);
+  const owned = React.useRef(false);
+  useEffect(() => {
+    const onPopState = (e) => {
+      if (!(e.state && e.state[key])) {
+        owned.current = false;
+        setActive(false);
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => {
+      window.removeEventListener("popstate", onPopState);
+      if (owned.current) {
+        owned.current = false;
+        history.back();
+      }
+    };
+  }, [key]);
+  const activate = () => {
+    history.pushState({ [key]: true }, "");
+    owned.current = true;
+    setActive(true);
+  };
+  const deactivate = () => {
+    if (owned.current) history.back();
+    else setActive(false);
+  };
+  return [active, activate, deactivate];
+}
+
 // ---------- Kassenzettel-Scan ----------
 async function fileToBase64(file) {
   return new Promise((resolve, reject) => {
@@ -488,7 +523,7 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
   const [scanResults, setScanResults] = useState(null);
   const [barcodeBusy, setBarcodeBusy] = useState(false);
   const [barcodeError, setBarcodeError] = useState("");
-  const [manageMode, setManageMode] = useState(false);
+  const [manageMode, activateManage, deactivateManage] = useHistoryFlag("zutatenManage");
   const [query, setQuery] = useState("");
   const gefiltert = zutaten.filter((z) => z.name.toLowerCase().includes(query.trim().toLowerCase()));
 
@@ -615,7 +650,7 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
           <SectionLabel>Zutaten-Register</SectionLabel>
           <button
             type="button"
-            onClick={() => setManageMode((m) => !m)}
+            onClick={() => (manageMode ? deactivateManage() : activateManage())}
             className="flex items-center gap-1 shrink-0 text-[12px] font-medium text-[#6B6450] hover:text-[#2B2A28] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450]"
           >
             <SlidersIcon size={13} />
@@ -804,6 +839,7 @@ function ZutatenTab({ zutaten, onAdd, onDelete, onUpdatePreis }) {
 // ---------- Rezepte-Tab ----------
 function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
   const [editing, setEditing] = useState(null); // rezept object being built
+  const [editingOpen, activateEditing, deactivateEditing] = useHistoryFlag("rezeptEdit");
   const [name, setName] = useState("");
   const [portionen, setPortionen] = useState(1);
   const [lines, setLines] = useState([]); // {zutatId, menge}
@@ -813,12 +849,17 @@ function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
   const [hint, setHint] = useState("");
   const pickZutatObj = zutaten.find((z) => z.id === pickZutat) || null;
 
+  useEffect(() => {
+    if (!editingOpen) setEditing(null);
+  }, [editingOpen]);
+
   const startNew = () => {
     setEditing("new");
     setName("");
     setPortionen(1);
     setLines([]);
     setHint("");
+    activateEditing();
   };
 
   const berechne = (linesArg, portionenArg) => {
@@ -855,7 +896,7 @@ function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
     setBusy(true);
     try {
       await onSave({ name, portionen, zutaten: lines });
-      setEditing(null);
+      deactivateEditing();
     } finally {
       setBusy(false);
     }
@@ -945,7 +986,7 @@ function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
         <div className="flex gap-2">
           <button
             type="button"
-            onClick={() => setEditing(null)}
+            onClick={deactivateEditing}
             className="flex-1 py-2 rounded-sm border border-[#B9AF97] text-sm text-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450]"
           >
             Abbrechen
