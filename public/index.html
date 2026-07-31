@@ -85,14 +85,14 @@ function DottedRow({ left, right, sub, bold, accent }) {
       >
         {right}
       </span>
-      {sub && <span className="text-[11px] text-[#948B72] ml-1">{sub}</span>}
+      {sub && <span className="text-[11px] text-[#79705A] ml-1">{sub}</span>}
     </div>
   );
 }
 
 function SectionLabel({ children }) {
   return (
-    <div className="text-[10.5px] tracking-[0.18em] uppercase font-semibold mb-2" style={{ color: "#8A8163" }}>
+    <div className="text-[10.5px] tracking-[0.18em] uppercase font-semibold mb-2" style={{ color: "#6E6650" }}>
       {children}
     </div>
   );
@@ -173,7 +173,7 @@ function AuthScreen() {
     <div className="min-h-screen flex items-center justify-center px-6" style={{ background: "#EFEADA", fontFamily: "'Inter', system-ui, sans-serif" }}>
       <Bon className="p-5 w-full max-w-sm">
         <h1 className="text-[19px] font-bold tracking-tight text-[#2B2A28] mb-1">Kalorien &amp; Kosten</h1>
-        <p className="text-[12px] text-[#8A8163] mb-4">{mode === "login" ? "Anmelden" : "Konto erstellen"}</p>
+        <p className="text-[12px] text-[#6E6650] mb-4">{mode === "login" ? "Anmelden" : "Konto erstellen"}</p>
 
         <button
           type="button"
@@ -191,7 +191,7 @@ function AuthScreen() {
 
         <div className="flex items-center gap-2 mb-3">
           <div className="flex-1 h-px bg-[#DCD4C0]" />
-          <span className="text-[11px] text-[#948B72]">oder</span>
+          <span className="text-[11px] text-[#79705A]">oder</span>
           <div className="flex-1 h-px bg-[#DCD4C0]" />
         </div>
 
@@ -238,7 +238,7 @@ function AuthScreen() {
         </button>
       </Bon>
 
-      <footer className="mt-4 text-center text-[11px] text-[#8A8163]">
+      <footer className="mt-4 text-center text-[11px] text-[#6E6650]">
         <a href="/impressum" className="underline">Impressum</a>
         <span className="mx-2">·</span>
         <a href="/datenschutz" className="underline">Datenschutz</a>
@@ -286,7 +286,7 @@ function ZutatenTab({ zutaten, onAdd }) {
             />
           </div>
         ))}
-        {zutaten.length === 0 && <p className="text-sm text-[#948B72] italic">Noch keine Zutaten angelegt.</p>}
+        {zutaten.length === 0 && <p className="text-sm text-[#79705A] italic">Noch keine Zutaten angelegt.</p>}
       </Bon>
 
       <Bon className="p-4">
@@ -336,7 +336,7 @@ function ZutatenTab({ zutaten, onAdd }) {
         >
           <PlusIcon size={15} /> Zutat speichern
         </button>
-        <p className="mt-2 text-[11px] text-[#948B72] flex items-center gap-1">
+        <p className="mt-2 text-[11px] text-[#79705A] flex items-center gap-1">
           <ReceiptIcon size={12} /> Kassenzettel-Scan folgt als eigener Import-Weg (Prototyp: manuell).
         </p>
       </Bon>
@@ -465,10 +465,10 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
         <Bon className="p-4">
           <SectionLabel>Live-Berechnung</SectionLabel>
           <DottedRow left="Gesamt" right={`${kcalFmt(totals.kcal)} kcal`} accent="#5C6B4F" bold />
-          <DottedRow left="Gesamt" right={euro(totals.kosten)} accent="#B08628" bold />
+          <DottedRow left="Gesamt" right={euro(totals.kosten)} accent="#8C6A1F" bold />
           <div className="h-px bg-[#DCD4C0] my-2" />
           <DottedRow left="Pro Portion" right={`${kcalFmt(totals.kcalPortion)} kcal`} accent="#5C6B4F" bold />
-          <DottedRow left="Pro Portion" right={euro(totals.kostenPortion)} accent="#B08628" bold />
+          <DottedRow left="Pro Portion" right={euro(totals.kostenPortion)} accent="#8C6A1F" bold />
         </Bon>
 
         {hint && <p className="text-[12px] text-[#A85A3F]">{hint}</p>}
@@ -500,10 +500,10 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
           <Bon key={r.id} className="p-4">
             <div className="flex items-center justify-between mb-1">
               <span className="font-semibold text-[#2B2A28]">{r.name}</span>
-              <span className="text-[11px] text-[#948B72]">{r.portionen} Portion(en)</span>
+              <span className="text-[11px] text-[#79705A]">{r.portionen} Portion(en)</span>
             </div>
             <DottedRow left="Pro Portion" right={`${kcalFmt(t.kcalPortion)} kcal`} accent="#5C6B4F" />
-            <DottedRow left="Pro Portion" right={euro(t.kostenPortion)} accent="#B08628" />
+            <DottedRow left="Pro Portion" right={euro(t.kostenPortion)} accent="#8C6A1F" />
           </Bon>
         );
       })}
@@ -614,10 +614,10 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
 
       <Bon className="p-4">
         <SectionLabel>Heutiger Bon</SectionLabel>
-        {log.length === 0 && <p className="text-sm text-[#948B72] italic">Noch nichts gegessen heute.</p>}
+        {log.length === 0 && <p className="text-sm text-[#79705A] italic">Noch nichts gegessen heute.</p>}
         {gruppen.map((g) => (
           <div key={g.kat} className="mb-3 last:mb-0">
-            <div className="text-[10px] uppercase tracking-wide text-[#B08628] font-semibold mb-1">{g.kat}</div>
+            <div className="text-[10px] uppercase tracking-wide text-[#8C6A1F] font-semibold mb-1">{g.kat}</div>
             {g.eintraege.map((e) => (
               <div key={e.id} className="flex items-center gap-2">
                 <DottedRow
@@ -653,12 +653,12 @@ function DashboardTab({ log }) {
           <div className="flex flex-col items-center py-3 rounded-sm bg-[#EFEADA]">
             <FlameIcon size={20} color="#5C6B4F" className="mb-1" />
             <span className="font-mono text-xl font-bold text-[#2B2A28]">{kcalFmt(totals.kcal)}</span>
-            <span className="text-[10.5px] uppercase tracking-wide text-[#8A8163]">kcal heute</span>
+            <span className="text-[10.5px] uppercase tracking-wide text-[#6E6650]">kcal heute</span>
           </div>
           <div className="flex flex-col items-center py-3 rounded-sm bg-[#EFEADA]">
-            <CoinsIcon size={20} color="#B08628" className="mb-1" />
+            <CoinsIcon size={20} color="#8C6A1F" className="mb-1" />
             <span className="font-mono text-xl font-bold text-[#2B2A28]">{euro(totals.kosten)}</span>
-            <span className="text-[10.5px] uppercase tracking-wide text-[#8A8163]">Kosten heute</span>
+            <span className="text-[10.5px] uppercase tracking-wide text-[#6E6650]">Kosten heute</span>
           </div>
         </div>
       </Bon>
@@ -671,14 +671,14 @@ function DashboardTab({ log }) {
           accent="#5C6B4F"
           bold
         />
-        <p className="text-[11px] text-[#948B72] mt-2">
+        <p className="text-[11px] text-[#79705A] mt-2">
           Höherer Wert = kalorienreicher pro Euro. Dient nur als grobe Orientierung, nicht als Nährwert-Ranking.
         </p>
       </Bon>
 
       {log.length === 0 && (
         <Bon className="p-4">
-          <p className="text-sm text-[#948B72] italic">Noch keine Einträge — buch im Log-Tab deine erste Mahlzeit ein.</p>
+          <p className="text-sm text-[#79705A] italic">Noch keine Einträge — buch im Log-Tab deine erste Mahlzeit ein.</p>
         </Bon>
       )}
     </div>
@@ -780,7 +780,7 @@ function MainApp({ session }) {
       <header className="px-5 pt-6 pb-4 flex items-start justify-between gap-3">
         <div>
           <h1 className="text-[19px] font-bold tracking-tight text-[#2B2A28]">Kalorien &amp; Kosten</h1>
-          <p className="text-[12px] text-[#8A8163]">jede Zutat, doppelt verbucht</p>
+          <p className="text-[12px] text-[#6E6650]">jede Zutat, doppelt verbucht</p>
           <p className="text-[10px] text-[#A79E85] mt-1">
             <a href="/impressum" className="underline">Impressum</a>
             <span className="mx-1">·</span>
@@ -789,7 +789,7 @@ function MainApp({ session }) {
         </div>
         <button
           onClick={() => sb.auth.signOut()}
-          className="flex items-center gap-1 text-[11px] text-[#8A8163] hover:text-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450] pt-1"
+          className="flex items-center gap-1 text-[11px] text-[#6E6650] hover:text-[#6B6450] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#6B6450] pt-1"
           title={session.user.email}
           aria-label={`Abmelden (angemeldet als ${session.user.email})`}
         >
@@ -806,7 +806,7 @@ function MainApp({ session }) {
       <main className="flex-1 px-4 max-w-md w-full mx-auto overflow-y-auto">
         {loading ? (
           <Bon className="p-4">
-            <p className="text-sm text-[#948B72] italic">Lädt…</p>
+            <p className="text-sm text-[#79705A] italic">Lädt…</p>
           </Bon>
         ) : (
           <React.Fragment>
@@ -856,7 +856,7 @@ function Root() {
   if (session === undefined) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: "#EFEADA" }}>
-        <p className="text-sm text-[#948B72] italic">Lädt…</p>
+        <p className="text-sm text-[#79705A] italic">Lädt…</p>
       </div>
     );
   }
