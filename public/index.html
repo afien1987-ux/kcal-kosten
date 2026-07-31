@@ -4,6 +4,13 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Kalorien & Kosten</title>
+<meta name="theme-color" content="#5C6B4F" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Kalorien & Kosten" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <script src="https://cdn.tailwindcss.com"></script>
@@ -14,6 +21,13 @@
 <style>
   html, body { background: #EFEADA; margin: 0; }
 </style>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    });
+  }
+</script>
 </head>
 <body>
 <div id="root"></div>
@@ -57,7 +71,7 @@ const ExternalLinkIcon = (p) => <Icon {...p}><path d="M15 3h6v6"/><path d="M10 1
 // Weitere Slots einfach ergänzen, z.B. "Zweites Frühstück", "Nachmittag" — keine DB-Änderung nötig.
 const MAHLZEIT_KATEGORIEN = ["Frühstück", "Mittagessen", "Abendessen", "Snack"];
 const UNDO_DELAY_MS = 5000;
-const KOFI_URL = "https://ko-fi.com/DEIN-KOFI-NAME"; // TODO: eigenen Ko-fi-Link eintragen
+const KOFI_URL = "https://ko-fi.com/adrianfien";
 
 // ---------- Hilfsfunktionen ----------
 const euro = (n) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
@@ -1022,8 +1036,7 @@ function HilfeGuide() {
   );
 }
 
-function MenuOverlay({ session, onClose }) {
-  const [view, setView] = useState("main");
+function MenuOverlay({ session, view, onNavigate, onBack, onClose }) {
   const titles = { main: "Menü", profil: "Profileinstellungen", hilfe: "Hilfe" };
 
   return (
@@ -1031,7 +1044,7 @@ function MenuOverlay({ session, onClose }) {
       <div className="max-w-md mx-auto px-4 pt-6 pb-10 min-h-screen">
         <div className="flex items-center gap-2 mb-4">
           {view !== "main" ? (
-            <IconBtn label="Zurück" onClick={() => setView("main")}>
+            <IconBtn label="Zurück" onClick={onBack}>
               <ArrowLeftIcon size={18} />
             </IconBtn>
           ) : (
@@ -1042,7 +1055,7 @@ function MenuOverlay({ session, onClose }) {
             <XIcon size={18} />
           </IconBtn>
         </div>
-        {view === "main" && <MenuMain session={session} onNavigate={setView} />}
+        {view === "main" && <MenuMain session={session} onNavigate={onNavigate} />}
         {view === "profil" && <ProfilSettings session={session} />}
         {view === "hilfe" && <HilfeGuide />}
       </div>
@@ -1058,7 +1071,8 @@ function MainApp({ session }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [tab, setTab] = useState("zutaten");
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuView, setMenuView] = useState(null); // null | "main" | "profil" | "hilfe"
+  const menuDepthRef = React.useRef(0);
   const [hiddenIds, setHiddenIds] = useState(() => new Set());
   const [toast, setToast] = useState(null); // { message, onUndo }
   const pendingTimers = React.useRef({});
@@ -1066,6 +1080,34 @@ function MainApp({ session }) {
   useEffect(() => () => {
     Object.values(pendingTimers.current).forEach(clearTimeout);
   }, []);
+
+  // Menü-Navigation läuft über die History API, damit der Handy-/Browser-Zurück-Button
+  // das Menü schließt bzw. eine Ebene zurückgeht, statt die App zu verlassen.
+  useEffect(() => {
+    const onPopState = (e) => {
+      const view = (e.state && e.state.menuView) || null;
+      setMenuView(view);
+      menuDepthRef.current = view === null ? 0 : view === "main" ? 1 : 2;
+    };
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  const openMenu = () => {
+    history.pushState({ menuView: "main" }, "");
+    menuDepthRef.current = 1;
+    setMenuView("main");
+  };
+  const navigateMenu = (view) => {
+    history.pushState({ menuView: view }, "");
+    menuDepthRef.current = 2;
+    setMenuView(view);
+  };
+  const backMenu = () => history.back();
+  const closeMenu = () => {
+    if (menuDepthRef.current > 0) history.go(-menuDepthRef.current);
+    else setMenuView(null);
+  };
 
   const softDelete = (id, label, commitFn, removeFromState) => {
     setHiddenIds((prev) => new Set(prev).add(id));
@@ -1213,12 +1255,14 @@ function MainApp({ session }) {
           <h1 className="text-[19px] font-bold tracking-tight text-[#2B2A28]">Kalorien &amp; Kosten</h1>
           <p className="text-[12px] text-[#6E6650]">jede Zutat, doppelt verbucht</p>
         </div>
-        <IconBtn label="Menü öffnen" onClick={() => setMenuOpen(true)}>
+        <IconBtn label="Menü öffnen" onClick={openMenu}>
           <MenuIcon size={20} color="#6B6450" />
         </IconBtn>
       </header>
 
-      {menuOpen && <MenuOverlay session={session} onClose={() => setMenuOpen(false)} />}
+      {menuView && (
+        <MenuOverlay session={session} view={menuView} onNavigate={navigateMenu} onBack={backMenu} onClose={closeMenu} />
+      )}
 
       {loadError && (
         <div className="px-4 mb-2 max-w-md w-full mx-auto">
