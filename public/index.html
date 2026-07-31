@@ -9,6 +9,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://unpkg.com/@babel/standalone@7/babel.min.js"></script>
 <style>
   html, body { background: #EFEADA; margin: 0; }
@@ -17,7 +18,13 @@
 <body>
 <div id="root"></div>
 <script type="text/babel" data-presets="react">
-const { useState, useMemo } = React;
+const { useState, useEffect, useMemo } = React;
+
+// ---------- Supabase ----------
+const SUPABASE_URL = "DEIN-PROJEKT.supabase.co"; // TODO: aus Supabase-Dashboard → Project Settings → API eintragen (mit https://)
+const SUPABASE_ANON_KEY = "DEIN-ANON-KEY"; // TODO: aus Supabase-Dashboard → Project Settings → API eintragen
+const SUPABASE_CONFIGURED = SUPABASE_URL.startsWith("https://") && !SUPABASE_ANON_KEY.startsWith("DEIN-");
+const sb = SUPABASE_CONFIGURED ? supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : null;
 
 /* ---- einfache SVG-Icons (kein lucide-react nötig ohne Build-Schritt) ---- */
 const Icon = ({ children, size = 18, color, className = "" }) => (
@@ -35,34 +42,17 @@ const DashboardIcon = (p) => <Icon {...p}><rect width="7" height="9" x="3" y="3"
 const XIcon = (p) => <Icon {...p}><path d="M18 6 6 18"/><path d="m6 6 12 12"/></Icon>;
 const FlameIcon = (p) => <Icon {...p}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></Icon>;
 const CoinsIcon = (p) => <Icon {...p}><circle cx="8" cy="8" r="6"/><path d="M18.09 10.37A6 6 0 1 1 10.34 18"/><path d="M7 6h1v4"/><path d="m16.71 13.88.7.71-2.82 2.82"/></Icon>;
+const LogOutIcon = (p) => <Icon {...p}><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></Icon>;
 
 // ---------- Hilfsfunktionen ----------
 const euro = (n) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
 const kcalFmt = (n) => Math.round(n).toLocaleString("de-DE");
-const uid = () => Math.random().toString(36).slice(2, 9);
-
 const preisPro100g = (z) => (z.einkaufsmenge > 0 ? (z.einkaufspreis / z.einkaufsmenge) * 100 : 0);
-
-const initialZutaten = [
-  { id: "z1", name: "Haferflocken", kcal100: 372, einkaufsmenge: 500, einkaufspreis: 1.49 },
-  { id: "z2", name: "Haselnüsse gehackt", kcal100: 646, einkaufsmenge: 200, einkaufspreis: 2.99 },
-  { id: "z3", name: "Heidelbeeren TK", kcal100: 42, einkaufsmenge: 300, einkaufspreis: 2.29 },
-  { id: "z4", name: "Vollmilch", kcal100: 64, einkaufsmenge: 1000, einkaufspreis: 1.19 },
-];
-
-const initialRezepte = [
-  {
-    id: "r1",
-    name: "Morgen-Müsli",
-    portionen: 1,
-    zutaten: [
-      { zutatId: "z1", menge: 60 },
-      { zutatId: "z2", menge: 15 },
-      { zutatId: "z3", menge: 50 },
-      { zutatId: "z4", menge: 150 },
-    ],
-  },
-];
+const startOfTodayISO = () => {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+};
 
 // ---------- Kleine UI-Bausteine im Kassenbon-Stil ----------
 function Bon({ children, className = "" }) {
@@ -118,23 +108,120 @@ function IconBtn({ onClick, children, danger }) {
   );
 }
 
-// ---------- Zutaten-Tab ----------
-function ZutatenTab({ zutaten, setZutaten }) {
-  const [form, setForm] = useState({ name: "", kcal100: "", einkaufsmenge: "", einkaufspreis: "" });
+// ---------- Setup-Hinweis, falls Supabase noch nicht konfiguriert ist ----------
+function SetupNotice() {
+  return (
+    <div className="min-h-screen flex items-center justify-center px-6" style={{ background: "#EFEADA", fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <Bon className="p-5 max-w-sm">
+        <SectionLabel>Setup nötig</SectionLabel>
+        <p className="text-sm text-[#2B2A28]">
+          Supabase ist noch nicht angebunden. Trag <code className="text-[12px]">SUPABASE_URL</code> und{" "}
+          <code className="text-[12px]">SUPABASE_ANON_KEY</code> oben in <code className="text-[12px]">public/index.html</code> ein
+          (siehe README, Abschnitt Supabase).
+        </p>
+      </Bon>
+    </div>
+  );
+}
 
-  const add = () => {
+// ---------- Login / Registrierung ----------
+function AuthScreen() {
+  const [mode, setMode] = useState("login"); // "login" | "signup"
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [info, setInfo] = useState("");
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setError("");
+    setInfo("");
+    setBusy(true);
+    try {
+      if (mode === "login") {
+        const { error: err } = await sb.auth.signInWithPassword({ email, password });
+        if (err) setError(err.message);
+      } else {
+        const { data, error: err } = await sb.auth.signUp({ email, password });
+        if (err) {
+          setError(err.message);
+        } else if (!data.session) {
+          setInfo("Fast geschafft — Bestätigungslink wurde an deine E-Mail geschickt.");
+        }
+      }
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center px-6" style={{ background: "#EFEADA", fontFamily: "'Inter', system-ui, sans-serif" }}>
+      <Bon className="p-5 w-full max-w-sm">
+        <h1 className="text-[19px] font-bold tracking-tight text-[#2B2A28] mb-1">Kalorien &amp; Kosten</h1>
+        <p className="text-[12px] text-[#8A8163] mb-4">{mode === "login" ? "Anmelden" : "Konto erstellen"}</p>
+
+        <form onSubmit={submit} className="space-y-3">
+          <input
+            type="email"
+            required
+            placeholder="E-Mail"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] outline-none py-1.5 text-sm placeholder:text-[#A79E85]"
+          />
+          <input
+            type="password"
+            required
+            minLength={6}
+            placeholder="Passwort (mind. 6 Zeichen)"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="w-full bg-transparent border-b border-[#B9AF97] focus:border-[#6B6450] outline-none py-1.5 text-sm placeholder:text-[#A79E85]"
+          />
+
+          {error && <p className="text-[12px] text-[#A85A3F]">{error}</p>}
+          {info && <p className="text-[12px] text-[#5C6B4F]">{info}</p>}
+
+          <button
+            type="submit"
+            disabled={busy}
+            className="w-full py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41] disabled:opacity-50"
+          >
+            {mode === "login" ? "Anmelden" : "Registrieren"}
+          </button>
+        </form>
+
+        <button
+          onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); setInfo(""); }}
+          className="mt-3 w-full text-center text-[12px] text-[#6B6450] underline"
+        >
+          {mode === "login" ? "Noch kein Konto? Registrieren" : "Schon ein Konto? Anmelden"}
+        </button>
+      </Bon>
+    </div>
+  );
+}
+
+// ---------- Zutaten-Tab ----------
+function ZutatenTab({ zutaten, onAdd }) {
+  const [form, setForm] = useState({ name: "", kcal100: "", einkaufsmenge: "", einkaufspreis: "" });
+  const [busy, setBusy] = useState(false);
+
+  const add = async () => {
     if (!form.name || !form.kcal100 || !form.einkaufsmenge || !form.einkaufspreis) return;
-    setZutaten((z) => [
-      ...z,
-      {
-        id: uid(),
+    setBusy(true);
+    try {
+      await onAdd({
         name: form.name,
         kcal100: parseFloat(form.kcal100),
         einkaufsmenge: parseFloat(form.einkaufsmenge),
         einkaufspreis: parseFloat(form.einkaufspreis),
-      },
-    ]);
-    setForm({ name: "", kcal100: "", einkaufsmenge: "", einkaufspreis: "" });
+      });
+      setForm({ name: "", kcal100: "", einkaufsmenge: "", einkaufspreis: "" });
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -187,7 +274,8 @@ function ZutatenTab({ zutaten, setZutaten }) {
         </div>
         <button
           onClick={add}
-          className="mt-3 w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] transition-colors"
+          disabled={busy}
+          className="mt-3 w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] transition-colors disabled:opacity-50"
         >
           <PlusIcon size={15} /> Zutat speichern
         </button>
@@ -200,13 +288,14 @@ function ZutatenTab({ zutaten, setZutaten }) {
 }
 
 // ---------- Rezepte-Tab ----------
-function RezepteTab({ zutaten, rezepte, setRezepte }) {
+function RezepteTab({ zutaten, rezepte, onSave }) {
   const [editing, setEditing] = useState(null); // rezept object being built
   const [name, setName] = useState("");
   const [portionen, setPortionen] = useState(1);
   const [lines, setLines] = useState([]); // {zutatId, menge}
   const [pickZutat, setPickZutat] = useState("");
   const [pickMenge, setPickMenge] = useState("");
+  const [busy, setBusy] = useState(false);
 
   const startNew = () => {
     setEditing("new");
@@ -233,10 +322,15 @@ function RezepteTab({ zutaten, rezepte, setRezepte }) {
     setPickMenge("");
   };
 
-  const save = () => {
+  const save = async () => {
     if (!name || lines.length === 0) return;
-    setRezepte((r) => [...r, { id: uid(), name, portionen, zutaten: lines }]);
-    setEditing(null);
+    setBusy(true);
+    try {
+      await onSave({ name, portionen, zutaten: lines });
+      setEditing(null);
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (editing) {
@@ -318,7 +412,8 @@ function RezepteTab({ zutaten, rezepte, setRezepte }) {
           </button>
           <button
             onClick={save}
-            className="flex-1 py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41]"
+            disabled={busy}
+            className="flex-1 py-2 rounded-sm bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium hover:bg-[#4C5A41] disabled:opacity-50"
           >
             Rezept speichern
           </button>
@@ -353,9 +448,10 @@ function RezepteTab({ zutaten, rezepte, setRezepte }) {
 }
 
 // ---------- Log-Tab ----------
-function LogTab({ rezepte, zutaten, log, setLog }) {
+function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
   const [rezeptId, setRezeptId] = useState("");
   const [faktor, setFaktor] = useState(1);
+  const [busy, setBusy] = useState(false);
 
   const berechne = (rezept, faktorArg) => {
     let kcal = 0, kosten = 0;
@@ -371,14 +467,16 @@ function LogTab({ rezepte, zutaten, log, setLog }) {
 
   const heute = new Date().toLocaleDateString("de-DE", { weekday: "short", day: "2-digit", month: "2-digit" });
 
-  const addEntry = () => {
+  const addEntry = async () => {
     const rezept = rezepte.find((r) => r.id === rezeptId);
     if (!rezept) return;
     const t = berechne(rezept, faktor);
-    setLog((l) => [
-      { id: uid(), rezeptName: rezept.name, faktor, kcal: t.kcal, kosten: t.kosten, zeit: new Date() },
-      ...l,
-    ]);
+    setBusy(true);
+    try {
+      await onAdd(rezept, faktor, t);
+    } finally {
+      setBusy(false);
+    }
   };
 
   return (
@@ -409,7 +507,8 @@ function LogTab({ rezepte, zutaten, log, setLog }) {
         </div>
         <button
           onClick={addEntry}
-          className="w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41]"
+          disabled={busy}
+          className="w-full flex items-center justify-center gap-1.5 bg-[#5C6B4F] text-[#FAF7EF] text-sm font-medium py-2 rounded-sm hover:bg-[#4C5A41] disabled:opacity-50"
         >
           <PlusIcon size={15} /> Einbuchen ({faktor}× Portion)
         </button>
@@ -425,7 +524,7 @@ function LogTab({ rezepte, zutaten, log, setLog }) {
               right={euro(e.kosten)}
               sub={`${kcalFmt(e.kcal)} kcal`}
             />
-            <IconBtn danger onClick={() => setLog((l) => l.filter((x) => x.id !== e.id))}>
+            <IconBtn danger onClick={() => onDelete(e.id)}>
               <TrashIcon size={13} />
             </IconBtn>
           </div>
@@ -483,12 +582,87 @@ function DashboardTab({ log }) {
   );
 }
 
-// ---------- App ----------
-function App() {
-  const [zutaten, setZutaten] = useState(initialZutaten);
-  const [rezepte, setRezepte] = useState(initialRezepte);
+// ---------- Eingeloggte App ----------
+function MainApp({ session }) {
+  const [zutaten, setZutaten] = useState([]);
+  const [rezepte, setRezepte] = useState([]);
   const [log, setLog] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [tab, setTab] = useState("zutaten");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [zRes, rRes, lRes] = await Promise.all([
+        sb.from("zutaten").select("*").order("created_at"),
+        sb.from("rezepte").select("id, name, portionen, rezept_zutaten(zutat_id, menge)").order("created_at"),
+        sb.from("log_eintraege").select("*").gte("zeit", startOfTodayISO()).order("zeit", { ascending: false }),
+      ]);
+      if (cancelled) return;
+      const err = zRes.error || rRes.error || lRes.error;
+      if (err) {
+        setLoadError(err.message);
+        setLoading(false);
+        return;
+      }
+      setZutaten(zRes.data);
+      setRezepte(
+        rRes.data.map((r) => ({
+          id: r.id,
+          name: r.name,
+          portionen: r.portionen,
+          zutaten: (r.rezept_zutaten || []).map((rz) => ({ zutatId: rz.zutat_id, menge: rz.menge })),
+        }))
+      );
+      setLog(
+        lRes.data.map((e) => ({
+          id: e.id,
+          rezeptName: e.rezept_name,
+          faktor: e.faktor,
+          kcal: e.kcal,
+          kosten: e.kosten,
+          zeit: e.zeit,
+        }))
+      );
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const addZutat = async (werte) => {
+    const { data, error } = await sb.from("zutaten").insert(werte).select().single();
+    if (error) { setLoadError(error.message); return; }
+    setZutaten((z) => [...z, data]);
+  };
+
+  const addRezept = async ({ name, portionen, zutaten: lines }) => {
+    const { data: rezeptRow, error } = await sb.from("rezepte").insert({ name, portionen }).select().single();
+    if (error) { setLoadError(error.message); return; }
+    const zeilen = lines.map((l) => ({ rezept_id: rezeptRow.id, zutat_id: l.zutatId, menge: l.menge }));
+    const { error: zErr } = await sb.from("rezept_zutaten").insert(zeilen);
+    if (zErr) { setLoadError(zErr.message); return; }
+    setRezepte((r) => [...r, { id: rezeptRow.id, name: rezeptRow.name, portionen: rezeptRow.portionen, zutaten: lines }]);
+  };
+
+  const addLogEntry = async (rezept, faktor, totals) => {
+    const { data, error } = await sb
+      .from("log_eintraege")
+      .insert({ rezept_id: rezept.id, rezept_name: rezept.name, faktor, kcal: totals.kcal, kosten: totals.kosten })
+      .select()
+      .single();
+    if (error) { setLoadError(error.message); return; }
+    setLog((l) => [
+      { id: data.id, rezeptName: data.rezept_name, faktor: data.faktor, kcal: data.kcal, kosten: data.kosten, zeit: data.zeit },
+      ...l,
+    ]);
+  };
+
+  const deleteLogEntry = async (id) => {
+    const { error } = await sb.from("log_eintraege").delete().eq("id", id);
+    if (error) { setLoadError(error.message); return; }
+    setLog((l) => l.filter((x) => x.id !== id));
+  };
 
   const tabs = [
     { id: "zutaten", label: "Zutaten", icon: ReceiptIcon },
@@ -499,16 +673,39 @@ function App() {
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#EFEADA", fontFamily: "'Inter', system-ui, sans-serif" }}>
-      <header className="px-5 pt-6 pb-4">
-        <h1 className="text-[19px] font-bold tracking-tight text-[#2B2A28]">Kalorien &amp; Kosten</h1>
-        <p className="text-[12px] text-[#8A8163]">jede Zutat, doppelt verbucht</p>
+      <header className="px-5 pt-6 pb-4 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[19px] font-bold tracking-tight text-[#2B2A28]">Kalorien &amp; Kosten</h1>
+          <p className="text-[12px] text-[#8A8163]">jede Zutat, doppelt verbucht</p>
+        </div>
+        <button
+          onClick={() => sb.auth.signOut()}
+          className="flex items-center gap-1 text-[11px] text-[#8A8163] hover:text-[#6B6450] pt-1"
+          title={session.user.email}
+        >
+          <LogOutIcon size={14} /> Abmelden
+        </button>
       </header>
 
+      {loadError && (
+        <div className="px-4 mb-2 max-w-md w-full mx-auto">
+          <p className="text-[12px] text-[#A85A3F]">{loadError}</p>
+        </div>
+      )}
+
       <main className="flex-1 px-4 max-w-md w-full mx-auto overflow-y-auto">
-        {tab === "zutaten" && <ZutatenTab zutaten={zutaten} setZutaten={setZutaten} />}
-        {tab === "rezepte" && <RezepteTab zutaten={zutaten} rezepte={rezepte} setRezepte={setRezepte} />}
-        {tab === "log" && <LogTab rezepte={rezepte} zutaten={zutaten} log={log} setLog={setLog} />}
-        {tab === "dashboard" && <DashboardTab log={log} />}
+        {loading ? (
+          <Bon className="p-4">
+            <p className="text-sm text-[#948B72] italic">Lädt…</p>
+          </Bon>
+        ) : (
+          <React.Fragment>
+            {tab === "zutaten" && <ZutatenTab zutaten={zutaten} onAdd={addZutat} />}
+            {tab === "rezepte" && <RezepteTab zutaten={zutaten} rezepte={rezepte} onSave={addRezept} />}
+            {tab === "log" && <LogTab rezepte={rezepte} zutaten={zutaten} log={log} onAdd={addLogEntry} onDelete={deleteLogEntry} />}
+            {tab === "dashboard" && <DashboardTab log={log} />}
+          </React.Fragment>
+        )}
       </main>
 
       <nav className="sticky bottom-0 bg-[#FAF7EF] border-t border-[#DCD4C0] flex justify-around py-2 max-w-md w-full mx-auto">
@@ -533,7 +730,30 @@ function App() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+// ---------- Root: Auth-Gate ----------
+function Root() {
+  const [session, setSession] = useState(undefined); // undefined = wird geladen, null = ausgeloggt
+
+  useEffect(() => {
+    if (!SUPABASE_CONFIGURED) return;
+    sb.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = sb.auth.onAuthStateChange((_event, sess) => setSession(sess));
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  if (!SUPABASE_CONFIGURED) return <SetupNotice />;
+  if (session === undefined) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: "#EFEADA" }}>
+        <p className="text-sm text-[#948B72] italic">Lädt…</p>
+      </div>
+    );
+  }
+  if (!session) return <AuthScreen />;
+  return <MainApp session={session} />;
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<Root />);
 </script>
 </body>
 </html>

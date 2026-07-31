@@ -6,33 +6,51 @@ und Kosten pro Portion.
 
 ## Stand dieses Prototyps
 - Zutaten, Rezepte, Log und Bilanz-Dashboard sind funktionsfähig.
-- **Keine Persistenz.** Der Zustand lebt nur im Browser-Tab (React State) und
-  geht beim Neuladen verloren. Das ist der nächste Ausbauschritt (Supabase
-  oder ähnliches).
+- **Persistenz über Supabase**, mit Login (E-Mail + Passwort, offenes
+  Sign-up). Jeder Account sieht nur seine eigenen Daten (Row Level Security).
+  Setup siehe Abschnitt "Supabase einrichten" unten.
 - **Kein Kassenzettel-Scan.** Preise werden aktuell manuell eingegeben. Die
   `/api/claude`-Route in `worker.js` ist bereits vorbereitet (gleiches Muster
   wie bei der Vorratsküche-App), wird aber noch nicht vom Frontend
   aufgerufen. Ein Anthropic API-Key ist deshalb **derzeit nicht nötig** –
-  Schritt 4 kann übersprungen werden, bis der Scan-Import gebaut ist.
+  Abschnitt 5 kann übersprungen werden, bis der Scan-Import gebaut ist.
 
-## 1. Repo auf GitHub anlegen
+## 1. Supabase einrichten
+1. Auf https://supabase.com registrieren/einloggen, neues Projekt anlegen
+   (Name z. B. `kalorien-kosten-tracker`, Region z. B. Frankfurt).
+2. Im Projekt: **SQL Editor** → neue Query → Inhalt von `supabase/schema.sql`
+   aus diesem Repo einfügen → **Run**. Das legt die vier Tabellen
+   (`zutaten`, `rezepte`, `rezept_zutaten`, `log_eintraege`) inkl.
+   Row-Level-Security an, sodass jeder Account nur seine eigenen Daten sieht.
+3. **Project Settings → API**: `Project URL` und `anon public`-Key kopieren.
+4. In `public/index.html` ganz oben im Script die beiden Konstanten
+   `SUPABASE_URL` und `SUPABASE_ANON_KEY` mit diesen Werten ersetzen. Der
+   anon-Key ist bewusst öffentlich nutzbar (kein Geheimnis) – die
+   Row-Level-Security-Policies aus Schritt 2 schützen die Daten pro Account.
+5. **Authentication → Sign In / Providers → Email**: Standardmäßig ist
+   "Confirm email" aktiviert – neue Accounts müssen die Bestätigungsmail
+   anklicken, bevor sie sich einloggen können. Das ist bei offenem Sign-up
+   sinnvoll und muss nicht geändert werden.
+
+## 2. Repo auf GitHub anlegen
 1. Neues Repo erstellen, z. B. `kalorien-kosten-tracker`.
-2. Diese drei Dateien/Ordner hochladen (flach, ohne `.git`):
+2. Diese Dateien/Ordner hochladen (flach, ohne `.git`):
    - `worker.js`
    - `wrangler.jsonc`
-   - `public/index.html`
+   - `public/index.html` (mit eingetragenen Supabase-Werten aus Schritt 1)
 
-## 2. Cloudflare Worker einrichten
+## 3. Cloudflare Worker einrichten
 1. Im Cloudflare Dashboard: **Workers & Pages → Create → Import a repository**.
 2. Das GitHub-Repo auswählen und verbinden.
 3. Cloudflare erkennt `wrangler.jsonc` automatisch (Build-Command bleibt leer,
    es gibt keinen Build-Schritt).
 4. Deploy anstoßen.
 
-## 3. Testen
-Die Worker-URL öffnen (z. B. `kalorien-kosten-tracker.<dein-subdomain>.workers.dev`).
+## 4. Testen
+Die Worker-URL öffnen (z. B. `kalorien-kosten-tracker.<dein-subdomain>.workers.dev`),
+Account registrieren, Bestätigungsmail anklicken, anmelden.
 
-## 4. Später: API-Key für Kassenzettel-Scan (noch nicht benötigt)
+## 5. Später: API-Key für Kassenzettel-Scan (noch nicht benötigt)
 Sobald der Scan-Import gebaut ist:
 1. Auf https://console.anthropic.com registrieren/einloggen (eigenes Konto,
    getrennt vom claude.ai-Abo, mit eigenem Guthaben/Abrechnung).
