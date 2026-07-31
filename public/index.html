@@ -48,6 +48,7 @@ const EyeOffIcon = (p) => <Icon {...p}><path d="M10.733 5.076a10.744 10.744 0 0 
 
 // Weitere Slots einfach ergänzen, z.B. "Zweites Frühstück", "Nachmittag" — keine DB-Änderung nötig.
 const MAHLZEIT_KATEGORIEN = ["Frühstück", "Mittagessen", "Abendessen", "Snack"];
+const UNDO_DELAY_MS = 5000;
 
 // ---------- Hilfsfunktionen ----------
 const euro = (n) => n.toLocaleString("de-DE", { style: "currency", currency: "EUR" });
@@ -318,7 +319,7 @@ function AuthScreen() {
 }
 
 // ---------- Zutaten-Tab ----------
-function ZutatenTab({ zutaten, onAdd }) {
+function ZutatenTab({ zutaten, onAdd, onDelete }) {
   const [form, setForm] = useState({ name: "", kcal100: "", einkaufsmenge: "", einkaufspreis: "" });
   const [busy, setBusy] = useState(false);
   const [hint, setHint] = useState("");
@@ -351,12 +352,15 @@ function ZutatenTab({ zutaten, onAdd }) {
       <Bon className="p-4">
         <SectionLabel>Zutaten-Register</SectionLabel>
         {zutaten.map((z) => (
-          <div key={z.id} className="group">
+          <div key={z.id} className="flex items-center gap-2">
             <DottedRow
               left={z.name}
               right={`${euro(preisPro100g(z))}/100g`}
               sub={`${z.kcal100} kcal/100g`}
             />
+            <IconBtn danger label={`${z.name} löschen`} onClick={() => onDelete(z)}>
+              <TrashIcon size={13} />
+            </IconBtn>
           </div>
         ))}
         {zutaten.length === 0 && <p className="text-sm text-[#79705A] italic">Noch keine Zutaten angelegt.</p>}
@@ -427,7 +431,7 @@ function ZutatenTab({ zutaten, onAdd }) {
 }
 
 // ---------- Rezepte-Tab ----------
-function RezepteTab({ zutaten, rezepte, onSave }) {
+function RezepteTab({ zutaten, rezepte, onSave, onDelete }) {
   const [editing, setEditing] = useState(null); // rezept object being built
   const [name, setName] = useState("");
   const [portionen, setPortionen] = useState(1);
@@ -592,7 +596,12 @@ function RezepteTab({ zutaten, rezepte, onSave }) {
           <Bon key={r.id} className="p-4">
             <div className="flex items-center justify-between mb-1">
               <span className="font-semibold text-[#2B2A28]">{r.name}</span>
-              <span className="text-[11px] text-[#79705A]">{r.portionen} Portion(en)</span>
+              <div className="flex items-center gap-1">
+                <span className="text-[11px] text-[#79705A]">{r.portionen} Portion(en)</span>
+                <IconBtn danger label={`${r.name} löschen`} onClick={() => onDelete(r)}>
+                  <TrashIcon size={13} />
+                </IconBtn>
+              </div>
             </div>
             <DottedRow left="Pro Portion" right={`${kcalFmt(t.kcalPortion)} kcal`} accent="#5C6B4F" />
             <DottedRow left="Pro Portion" right={euro(t.kostenPortion)} accent="#8C6A1F" />
@@ -725,7 +734,7 @@ function LogTab({ rezepte, zutaten, log, onAdd, onDelete }) {
                   right={euro(e.kosten)}
                   sub={`${kcalFmt(e.kcal)} kcal`}
                 />
-                <IconBtn danger label={`${e.rezeptName} löschen`} onClick={() => onDelete(e.id)}>
+                <IconBtn danger label={`${e.rezeptName} löschen`} onClick={() => onDelete(e)}>
                   <TrashIcon size={13} />
                 </IconBtn>
               </div>
@@ -793,6 +802,40 @@ function MainApp({ session }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [tab, setTab] = useState("zutaten");
+  const [hiddenIds, setHiddenIds] = useState(() => new Set());
+  const [toast, setToast] = useState(null); // { message, onUndo }
+  const pendingTimers = React.useRef({});
+
+  useEffect(() => () => {
+    Object.values(pendingTimers.current).forEach(clearTimeout);
+  }, []);
+
+  const softDelete = (id, label, commitFn, removeFromState) => {
+    setHiddenIds((prev) => new Set(prev).add(id));
+    const timer = setTimeout(async () => {
+      delete pendingTimers.current[id];
+      const { error } = await commitFn();
+      if (error) {
+        setLoadError(error.message);
+        setHiddenIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+        return;
+      }
+      removeFromState();
+      setHiddenIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+      setToast((t) => (t && t.id === id ? null : t));
+    }, UNDO_DELAY_MS);
+    pendingTimers.current[id] = timer;
+    setToast({
+      id,
+      message: `${label} gelöscht`,
+      onUndo: () => {
+        clearTimeout(pendingTimers.current[id]);
+        delete pendingTimers.current[id];
+        setHiddenIds((prev) => { const n = new Set(prev); n.delete(id); return n; });
+        setToast(null);
+      },
+    });
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -862,10 +905,37 @@ function MainApp({ session }) {
     ]);
   };
 
-  const deleteLogEntry = async (id) => {
-    const { error } = await sb.from("log_eintraege").delete().eq("id", id);
-    if (error) { setLoadError(error.message); return; }
-    setLog((l) => l.filter((x) => x.id !== id));
+  const deleteLogEntry = (entry) => {
+    softDelete(
+      entry.id,
+      entry.rezeptName,
+      () => sb.from("log_eintraege").delete().eq("id", entry.id),
+      () => setLog((l) => l.filter((x) => x.id !== entry.id))
+    );
+  };
+
+  const deleteZutat = (zutat) => {
+    const verwendetIn = rezepte.filter((r) => r.zutaten.some((l) => l.zutatId === zutat.id));
+    if (verwendetIn.length > 0) {
+      setLoadError(`"${zutat.name}" wird in "${verwendetIn.map((r) => r.name).join('", "')}" verwendet — dort zuerst entfernen.`);
+      return;
+    }
+    setLoadError("");
+    softDelete(
+      zutat.id,
+      zutat.name,
+      () => sb.from("zutaten").delete().eq("id", zutat.id),
+      () => setZutaten((z) => z.filter((x) => x.id !== zutat.id))
+    );
+  };
+
+  const deleteRezept = (rezept) => {
+    softDelete(
+      rezept.id,
+      rezept.name,
+      () => sb.from("rezepte").delete().eq("id", rezept.id),
+      () => setRezepte((r) => r.filter((x) => x.id !== rezept.id))
+    );
   };
 
   const tabs = [
@@ -874,6 +944,10 @@ function MainApp({ session }) {
     { id: "log", label: "Log", icon: CalendarIcon },
     { id: "dashboard", label: "Bilanz", icon: DashboardIcon },
   ];
+
+  const visibleZutaten = zutaten.filter((z) => !hiddenIds.has(z.id));
+  const visibleRezepte = rezepte.filter((r) => !hiddenIds.has(r.id));
+  const visibleLog = log.filter((e) => !hiddenIds.has(e.id));
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: "#EFEADA", fontFamily: "'Inter', system-ui, sans-serif" }}>
@@ -911,13 +985,24 @@ function MainApp({ session }) {
           </Bon>
         ) : (
           <React.Fragment>
-            {tab === "zutaten" && <ZutatenTab zutaten={zutaten} onAdd={addZutat} />}
-            {tab === "rezepte" && <RezepteTab zutaten={zutaten} rezepte={rezepte} onSave={addRezept} />}
-            {tab === "log" && <LogTab rezepte={rezepte} zutaten={zutaten} log={log} onAdd={addLogEntry} onDelete={deleteLogEntry} />}
-            {tab === "dashboard" && <DashboardTab log={log} />}
+            {tab === "zutaten" && <ZutatenTab zutaten={visibleZutaten} onAdd={addZutat} onDelete={deleteZutat} />}
+            {tab === "rezepte" && <RezepteTab zutaten={visibleZutaten} rezepte={visibleRezepte} onSave={addRezept} onDelete={deleteRezept} />}
+            {tab === "log" && <LogTab rezepte={visibleRezepte} zutaten={visibleZutaten} log={visibleLog} onAdd={addLogEntry} onDelete={deleteLogEntry} />}
+            {tab === "dashboard" && <DashboardTab log={visibleLog} />}
           </React.Fragment>
         )}
       </main>
+
+      {toast && (
+        <div className="sticky bottom-[60px] px-4 max-w-md w-full mx-auto z-10" role="status">
+          <div className="flex items-center justify-between gap-3 bg-[#2B2A28] text-[#FAF7EF] text-sm rounded-sm px-4 py-2.5 shadow-md">
+            <span>{toast.message}</span>
+            <button type="button" onClick={toast.onUndo} className="font-semibold underline shrink-0 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#FAF7EF]">
+              Rückgängig
+            </button>
+          </div>
+        </div>
+      )}
 
       <nav className="sticky bottom-0 bg-[#FAF7EF] border-t border-[#DCD4C0] flex justify-around py-2 max-w-md w-full mx-auto">
         {tabs.map((t) => {
